@@ -8,6 +8,11 @@
     "start": "next start"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.84",
+    "@ai-sdk/react": "^3.0.207",
+    "ai": "^6.0.205",
+    "framer-motion": "^12.40.0",
+    "lucide-react": "^1.18.0",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4"
