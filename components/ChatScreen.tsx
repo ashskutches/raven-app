@@ -20,11 +20,34 @@ const CHAT_URL = '/api/chat';
 
 
 
+const CONV_KEY = 'raven_conversation_id';
+const CONV_TS_KEY = 'raven_conversation_ts';
+const CONV_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function loadPersistedConversationId(): string | null {
+  try {
+    const ts = Number(localStorage.getItem(CONV_TS_KEY) ?? '0');
+    if (Date.now() - ts > CONV_TTL_MS) {
+      localStorage.removeItem(CONV_KEY);
+      localStorage.removeItem(CONV_TS_KEY);
+      return null;
+    }
+    return localStorage.getItem(CONV_KEY);
+  } catch { return null; }
+}
+
+function persistConversationId(id: string) {
+  try {
+    localStorage.setItem(CONV_KEY, id);
+    localStorage.setItem(CONV_TS_KEY, String(Date.now()));
+  } catch { /* storage unavailable */ }
+}
+
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(() => loadPersistedConversationId());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -154,7 +177,17 @@ export default function ChatScreen() {
               return;
             }
 
-            if (data.done) break;
+            if (data.done) {
+              // Persist conversationId so thread survives page refresh (24h TTL)
+              const serverId = (data as { conversationId?: string }).conversationId;
+              if (serverId && serverId !== conversationId) {
+                setConversationId(serverId);
+                persistConversationId(serverId);
+              } else if (conversationId) {
+                persistConversationId(conversationId);
+              }
+              break;
+            }
           } catch { /* skip malformed */ }
         }
       }
