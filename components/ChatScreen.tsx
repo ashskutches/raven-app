@@ -82,16 +82,51 @@ export default function ChatScreen() {
           if (!line.startsWith('data: ')) continue;
           try {
             const data = JSON.parse(line.slice(6));
+
             if (data.text) {
               accumulated += data.text;
               setMessages(prev =>
                 prev.map(m =>
-                  m.id === assistantId
-                    ? { ...m, content: accumulated }
-                    : m
+                  m.id === assistantId ? { ...m, content: accumulated } : m
                 )
               );
             }
+
+            // Capability tags were stripped — update displayed text
+            if (data.correctedText) {
+              accumulated = data.correctedText;
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId ? { ...m, content: accumulated } : m
+                )
+              );
+            }
+
+            // Stream-level error from API — capture + show
+            if (data.error) {
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId
+                    ? { ...m, content: 'I hit a snag. Please try again.', streaming: false }
+                    : m
+                )
+              );
+              // Report to evolution queue
+              fetch(`${RAVEN_API}/evolution`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'error',
+                  title: `Chat stream error: ${String(data.error).slice(0, 120)}`,
+                  description: data.error,
+                  priority: 'high',
+                  source: 'runtime',
+                  context: { phase: 'streaming', conversationId },
+                }),
+              }).catch(() => {});
+              return;
+            }
+
             if (data.done) break;
           } catch { /* skip malformed */ }
         }
@@ -104,13 +139,27 @@ export default function ChatScreen() {
 
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
+      const msg = (err as Error).message ?? 'Unknown fetch error';
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantId
-            ? { ...m, content: "I hit a snag. Please try again.", streaming: false }
+            ? { ...m, content: 'I hit a snag. Please try again.', streaming: false }
             : m
         )
       );
+      // Report fetch-level error to evolution queue
+      fetch(`${RAVEN_API}/evolution`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'error',
+          title: `Chat fetch error: ${msg.slice(0, 120)}`,
+          description: msg,
+          priority: 'high',
+          source: 'runtime',
+          context: { phase: 'fetch' },
+        }),
+      }).catch(() => {});
     } finally {
       setIsStreaming(false);
     }
