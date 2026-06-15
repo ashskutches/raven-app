@@ -1,38 +1,58 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, BookOpen, LayoutDashboard, Target, Repeat, Sun } from 'lucide-react';
+import { MessageSquare, BookOpen, LayoutDashboard, Target, Repeat, Sun, Zap } from 'lucide-react';
 import ChatScreen from '@/components/ChatScreen';
 import LibraryScreen from '@/components/LibraryScreen';
 import DashboardScreen from '@/components/DashboardScreen';
 import GoalsScreen from '@/components/GoalsScreen';
 import HabitsScreen from '@/components/HabitsScreen';
 import CheckInScreen from '@/components/CheckInScreen';
+import EvolutionScreen from '@/components/EvolutionScreen';
 import AuthGate from '@/components/AuthGate';
 
-type Screen = 'chat' | 'library' | 'dashboard' | 'goals' | 'habits' | 'checkin';
-
-const NAV = [
-  { id: 'chat', label: 'Chat', icon: MessageSquare },
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'goals', label: 'Goals', icon: Target },
-  { id: 'habits', label: 'Habits', icon: Repeat },
-  { id: 'checkin', label: 'Daily Check-in', icon: Sun },
-  { id: 'library', label: "Raven's Library", icon: BookOpen },
-] as const;
+type Screen = 'chat' | 'library' | 'dashboard' | 'goals' | 'habits' | 'checkin' | 'evolution';
 
 const SCREEN_TITLES: Record<Screen, string> = {
-  chat: 'Chat with Raven',
-  dashboard: 'Dashboard',
-  goals: 'Goals',
-  habits: 'Habits & Streaks',
-  checkin: 'Daily Check-in',
-  library: "Raven's Library",
+  chat:       'Chat with Raven',
+  dashboard:  'Dashboard',
+  goals:      'Goals',
+  habits:     'Habits & Streaks',
+  checkin:    'Daily Check-in',
+  library:    "Raven's Library",
+  evolution:  'Evolution Queue',
 };
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>('chat');
+  const [evolutionCount, setEvolutionCount] = useState(0);
+
+  // Poll evolution queue summary for nav badge
+  useEffect(() => {
+    const API = process.env.NEXT_PUBLIC_RAVEN_API_URL ?? '';
+    async function fetchSummary() {
+      try {
+        const r = await fetch(`${API}/evolution/summary`);
+        if (!r.ok) return;
+        const data = await r.json() as { total_pending: number; critical: number };
+        setEvolutionCount(data.total_pending ?? 0);
+      } catch { /* silent */ }
+    }
+    fetchSummary();
+    const interval = setInterval(fetchSummary, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const NAV = [
+    { id: 'chat',      label: 'Chat',           icon: MessageSquare, badge: 0 },
+    { id: 'dashboard', label: 'Dashboard',       icon: LayoutDashboard, badge: 0 },
+    { id: 'goals',     label: 'Goals',           icon: Target, badge: 0 },
+    { id: 'habits',    label: 'Habits',          icon: Repeat, badge: 0 },
+    { id: 'checkin',   label: 'Daily Check-in',  icon: Sun, badge: 0 },
+    { id: 'library',   label: "Raven's Library", icon: BookOpen, badge: 0 },
+    { id: 'evolution', label: 'Evolve',          icon: Zap, badge: evolutionCount },
+  ] as const;
 
   return (
     <AuthGate>
@@ -44,7 +64,7 @@ export default function Home() {
             <span className="logo-text">Raven</span>
           </div>
 
-          {NAV.map(({ id, label, icon: Icon }) => (
+          {NAV.map(({ id, label, icon: Icon, badge }) => (
             <button
               key={id}
               className={`nav-item ${screen === id ? 'active' : ''}`}
@@ -53,13 +73,28 @@ export default function Home() {
             >
               <Icon size={17} />
               {label}
+              {badge > 0 && (
+                <span style={{
+                  marginLeft: 'auto',
+                  background: id === 'evolution' ? 'rgba(251,113,133,0.85)' : 'rgba(167,139,250,0.85)',
+                  color: '#fff',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '100px',
+                  lineHeight: '16px',
+                  minWidth: '18px',
+                  textAlign: 'center',
+                }}>
+                  {badge > 99 ? '99+' : badge}
+                </span>
+              )}
             </button>
           ))}
         </nav>
 
         {/* ── Main ─────────────────────────────────────────────── */}
         <main className="main-content">
-          {/* Topbar */}
           <header className="topbar">
             <h1 className="topbar-title">{SCREEN_TITLES[screen]}</h1>
             <div className="topbar-status">
@@ -68,7 +103,6 @@ export default function Home() {
             </div>
           </header>
 
-          {/* Animated screen transitions */}
           <AnimatePresence mode="wait">
             <motion.div
               key={screen}
@@ -84,6 +118,7 @@ export default function Home() {
               {screen === 'habits'    && <HabitsScreen />}
               {screen === 'checkin'   && <CheckInScreen />}
               {screen === 'library'   && <LibraryScreen />}
+              {screen === 'evolution' && <EvolutionScreen onResolved={() => setEvolutionCount(c => Math.max(0, c - 1))} />}
             </motion.div>
           </AnimatePresence>
         </main>
