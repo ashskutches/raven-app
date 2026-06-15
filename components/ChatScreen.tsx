@@ -4,7 +4,8 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles } from 'lucide-react';
 
-type Message = { id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean };
+type Message = { id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean; toolIndicator?: string };
+
 
 const SUGGESTIONS = [
   "Let's set a goal together",
@@ -91,12 +92,34 @@ export default function ChatScreen() {
               accumulated += data.text;
               setMessages(prev =>
                 prev.map(m =>
-                  m.id === assistantId ? { ...m, content: accumulated } : m
+                  m.id === assistantId ? { ...m, content: accumulated, toolIndicator: undefined } : m
                 )
               );
             }
 
-            // Capability tags were stripped — update displayed text
+            // Tool call starting — show live indicator
+            if (data.tool_call) {
+              const labels: Record<string, string> = {
+                web_search: `🔍 Searching: "${(data.args as Record<string,string>)?.query ?? '...'}"`,
+                read_url: `📄 Reading article...`,
+                store_research: `💾 Saving to library...`,
+                recall_memory: `🧠 Recalling memories...`,
+              };
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId ? { ...m, toolIndicator: labels[data.tool_call as string] ?? `⚙️ Working...` } : m
+                )
+              );
+            }
+
+            // Tool done — clear indicator
+            if (data.tool_result !== undefined) {
+              setMessages(prev =>
+                prev.map(m => m.id === assistantId ? { ...m, toolIndicator: undefined } : m)
+              );
+            }
+
+            // Capability tags stripped
             if (data.correctedText) {
               accumulated = data.correctedText;
               setMessages(prev =>
@@ -227,8 +250,16 @@ export default function ChatScreen() {
                 <div className="message-avatar">
                   {msg.role === 'assistant' ? '🦅' : '🧠'}
                 </div>
-                <div className={`message-bubble ${msg.streaming ? 'streaming-cursor' : ''}`}>
-                  <SimpleMarkdown content={msg.content} />
+                <div className={`message-bubble ${msg.streaming && !msg.toolIndicator ? 'streaming-cursor' : ''}`}>
+                  {msg.toolIndicator ? (
+                    <div className="tool-indicator">
+                      <span className="tool-indicator-text">{msg.toolIndicator}</span>
+                      <span className="tool-indicator-dots"><span>.</span><span>.</span><span>.</span></span>
+                    </div>
+                  ) : (
+                    <SimpleMarkdown content={msg.content} />
+                  )}
+                  {msg.toolIndicator && msg.content && <SimpleMarkdown content={msg.content} />}
                 </div>
               </motion.div>
             ))}
