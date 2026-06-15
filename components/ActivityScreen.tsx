@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Zap, BookOpen, Search, MessageSquare, Calendar, Wrench } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Zap, BookOpen, Search, MessageSquare, Calendar, Wrench, Heart, Send } from 'lucide-react';
 
 const API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
 
@@ -25,15 +25,19 @@ const ACTION_META: Record<string, { icon: React.ReactNode; label: string; color:
   research_stored:   { icon: <Search size={14} />, label: 'Research Stored', color: '#60a5fa' },
   fact_extracted:    { icon: <Zap size={14} />, label: 'Fact Extracted', color: '#f472b6' },
   proactive_message: { icon: <MessageSquare size={14} />, label: 'Proactive Message', color: '#fb923c' },
-  tool_used:         { icon: <Wrench size={14} />, label: 'Tool Used', color: '#94a3b8' },
+  tool_used:         { icon: <Wrench size={14} />, label: 'Tool Used',          color: '#94a3b8' },
+  pulse_complete:    { icon: <Heart size={14} />,   label: 'Pulse',               color: '#ec4899' },
+  outreach_sent:     { icon: <Send size={14} />,    label: 'Outreach Sent',       color: '#fb923c' },
 };
 
 const FILTERS = [
   { id: '', label: 'All' },
   { id: 'morning_briefing', label: 'Briefings' },
+  { id: 'pulse_complete', label: 'Pulse' },
   { id: 'routine_run', label: 'Routines' },
   { id: 'research_stored', label: 'Research' },
   { id: 'library_write', label: 'Library' },
+  { id: 'proactive_message', label: 'Outreach' },
 ];
 
 export default function ActivityScreen() {
