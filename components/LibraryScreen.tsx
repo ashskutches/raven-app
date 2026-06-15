@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -53,7 +54,7 @@ export default function ResearchScreen() {
   async function triggerResearch() {
     setRunning(true);
     try {
-      await fetch(`${API}/research/run`, { method: 'POST' });
+      await apiFetch(`/research/run`, { method: 'POST' });
       setTimeout(fetchItems, 8000);
     } catch { /* silent */ } finally {
       setTimeout(() => setRunning(false), 4000);
@@ -63,7 +64,7 @@ export default function ResearchScreen() {
   async function addTopic() {
     if (!newTopic.trim()) return;
     try {
-      await fetch(`${API}/research/queue`, {
+      await apiFetch(`/research/queue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic: newTopic.trim(), rationale: newRationale.trim() || undefined, priority: 3 }),
@@ -76,7 +77,7 @@ export default function ResearchScreen() {
   }
 
   async function deleteItem(id: string) {
-    await fetch(`${API}/research/queue/${id}`, { method: 'DELETE' });
+    await apiFetch(`/research/queue/${id}`, { method: 'DELETE' });
     setItems(prev => prev.filter(i => i.id !== id));
   }
 

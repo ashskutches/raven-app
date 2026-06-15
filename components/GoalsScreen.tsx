@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -63,7 +64,7 @@ export default function GoalsScreen() {
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      await fetch(`${RAVEN_API}/goals`, {
+      await apiFetch(`/goals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -77,7 +78,7 @@ export default function GoalsScreen() {
   };
 
   const updateProgress = async (id: string, delta: number, note: string) => {
-    await fetch(`${RAVEN_API}/goals/${id}/updates`, {
+    await apiFetch(`/goals/${id}/updates`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note, progress_delta: delta }),
@@ -86,7 +87,7 @@ export default function GoalsScreen() {
   };
 
   const archiveGoal = async (id: string, status: 'achieved' | 'abandoned') => {
-    await fetch(`${RAVEN_API}/goals/${id}`, {
+    await apiFetch(`/goals/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),

@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
@@ -18,13 +19,13 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     // Health check
-    fetch(`${RAVEN_API}/health`)
+    apiFetch(`/health`)
       .then(r => r.json())
       .then(setHealth)
       .catch(() => null);
 
     // Facts
-    fetch(`${RAVEN_API}/library?type=user_fact&limit=10`)
+    apiFetch(`/library?type=user_fact&limit=10`)
       .then(r => r.json())
       .then((data: Array<{ title: string; summary: string }>) => {
         setFacts(data.map(d => ({ key: d.title, value: d.summary || '' })));
@@ -32,7 +33,7 @@ export default function DashboardScreen() {
       .catch(() => null);
 
     // Goals from library goal_context
-    fetch(`${RAVEN_API}/library?type=goal_context&limit=6`)
+    apiFetch(`/library?type=goal_context&limit=6`)
       .then(r => r.json())
       .then((data: Array<{ title: string; summary: string }>) => {
         setGoals(data.map(d => ({ title: d.title, status: 'active', progress: 0 })));
@@ -40,7 +41,7 @@ export default function DashboardScreen() {
       .catch(() => null);
 
     // Library stats
-    fetch(`${RAVEN_API}/library`)
+    apiFetch(`/library`)
       .then(r => r.json())
       .then((data: Array<{ type: string }>) => {
         const byType: Record<string, number> = {};

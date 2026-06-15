@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,7 +44,7 @@ export default function MindScreen() {
       const params = new URLSearchParams();
       if (tab) params.set('type', tab);
       if (!showAddressed) params.set('addressed', 'false');
-      const r = await fetch(`${API}/mind?${params}`);
+      const r = await apiFetch(`/mind?${params}`);
       if (!r.ok) return;
       setItems(await r.json() as DialogItem[]);
     } catch { /* silent */ } finally {
@@ -62,7 +63,7 @@ export default function MindScreen() {
   async function triggerReflection() {
     setReflecting(true);
     try {
-      await fetch(`${API}/mind/reflect`, { method: 'POST' });
+      await apiFetch(`/mind/reflect`, { method: 'POST' });
       setTimeout(fetchItems, 5000); // Refresh after 5s
     } catch { /* silent */ } finally {
       setTimeout(() => setReflecting(false), 3000);
@@ -71,7 +72,7 @@ export default function MindScreen() {
 
   async function markAddressed(id: string) {
     try {
-      await fetch(`${API}/mind/${id}/address`, { method: 'PATCH' });
+      await apiFetch(`/mind/${id}/address`, { method: 'PATCH' });
       setItems(prev => prev.map(i => i.id === id ? { ...i, addressed: true } : i));
     } catch { /* silent */ }
   }

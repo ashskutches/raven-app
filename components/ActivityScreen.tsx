@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -51,7 +52,7 @@ export default function ActivityScreen() {
     try {
       const params = new URLSearchParams({ limit: '50' });
       if (filter) params.set('action', filter);
-      const r = await fetch(`${API}/activity?${params}`);
+      const r = await apiFetch(`/activity?${params}`);
       if (!r.ok) return;
       const data = await r.json() as ActivityItem[];
       setItems(data);
@@ -62,7 +63,7 @@ export default function ActivityScreen() {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/activity/summary`);
+      const r = await apiFetch(`/activity/summary`);
       if (!r.ok) return;
       const data = await r.json() as { last_7_days: Record<string, number> };
       setSummary(data.last_7_days ?? {});

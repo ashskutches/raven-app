@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles } from 'lucide-react';
+import { apiFetch } from '../lib/api.js';
 
 type Message = { id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean; toolIndicator?: string };
 
@@ -83,7 +84,10 @@ export default function ChatScreen() {
 
       const response = await fetch(`${RAVEN_API}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(process.env.NEXT_PUBLIC_RAVEN_API_SECRET ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_RAVEN_API_SECRET}` } : {}),
+        },
         body: JSON.stringify({ messages: history, conversationId }),
         signal: abortRef.current.signal,
       });
@@ -208,7 +212,7 @@ export default function ChatScreen() {
         )
       );
       // Report fetch-level error to evolution queue
-      fetch(`${RAVEN_API}/evolution`, {
+      apiFetch(`/evolution`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

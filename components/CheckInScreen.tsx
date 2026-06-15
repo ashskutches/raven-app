@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -40,7 +41,7 @@ export default function CheckInScreen() {
   });
 
   useEffect(() => {
-    fetch(`${RAVEN_API}/checkin/today`)
+    apiFetch(`/checkin/today`)
       .then(r => r.json())
       .then(data => {
         if (data) {
@@ -58,7 +59,7 @@ export default function CheckInScreen() {
       })
       .catch(() => null);
 
-    fetch(`${RAVEN_API}/checkin/stats`)
+    apiFetch(`/checkin/stats`)
       .then(r => r.json())
       .then(setStats)
       .catch(() => null);
@@ -67,7 +68,7 @@ export default function CheckInScreen() {
   const save = async () => {
     setSaving(true);
     try {
-      await fetch(`${RAVEN_API}/checkin`, {
+      await apiFetch(`/checkin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

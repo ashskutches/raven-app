@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -29,7 +30,7 @@ export default function HabitsScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetch(`${RAVEN_API}/habits`).then(r => r.json());
+      const data = await apiFetch(`/habits`).then(r => r.json());
       setHabits(Array.isArray(data) ? data : []);
     } catch { /* silent */ } finally {
       setLoading(false);
@@ -41,7 +42,7 @@ export default function HabitsScreen() {
   const complete = async (id: string) => {
     setCompleting(id);
     try {
-      await fetch(`${RAVEN_API}/habits/${id}/log`, {
+      await apiFetch(`/habits/${id}/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed: true }),
@@ -56,7 +57,7 @@ export default function HabitsScreen() {
     if (!form.name.trim()) return;
     setSaving(true);
     try {
-      await fetch(`${RAVEN_API}/habits`, {
+      await apiFetch(`/habits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

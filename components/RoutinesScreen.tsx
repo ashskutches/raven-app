@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -52,7 +53,7 @@ export default function RoutinesScreen() {
 
   async function fetchRoutines() {
     try {
-      const r = await fetch(`${API}/routines`);
+      const r = await apiFetch(`/routines`);
       if (!r.ok) return;
       setRoutines(await r.json() as Routine[]);
     } catch { /* silent */ } finally {
@@ -65,7 +66,7 @@ export default function RoutinesScreen() {
   async function toggleRoutine(id: string, enabled: boolean) {
     setRoutines(prev => prev.map(r => r.id === id ? { ...r, enabled } : r));
     try {
-      await fetch(`${API}/routines/${id}`, {
+      await apiFetch(`/routines/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
@@ -76,7 +77,7 @@ export default function RoutinesScreen() {
   async function deleteRoutine(id: string) {
     setDeleting(id);
     try {
-      await fetch(`${API}/routines/${id}`, { method: 'DELETE' });
+      await apiFetch(`/routines/${id}`, { method: 'DELETE' });
       setRoutines(prev => prev.filter(r => r.id !== id));
     } catch { /* silent */ } finally {
       setDeleting(null);

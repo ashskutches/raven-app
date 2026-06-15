@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -131,7 +132,7 @@ export default function CostScreen() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`${RAVEN_API}/cost/summary`);
+      const res = await apiFetch(`/cost/summary`);
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       setData(await res.json());
     } catch (e) {

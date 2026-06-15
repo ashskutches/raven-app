@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -53,7 +54,7 @@ function ItemCard({ item, onUpdate }: { item: EvolutionItem; onUpdate: () => voi
   async function updateStatus(status: Status) {
     setUpdating(true);
     try {
-      await fetch(`${API}/evolution/${item.id}`, {
+      await apiFetch(`/evolution/${item.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -225,7 +226,7 @@ export default function EvolutionScreen({ onResolved }: { onResolved: () => void
     try {
       const params = new URLSearchParams({ status: tab });
 
-      const r = await fetch(`${API}/evolution?${params}`);
+      const r = await apiFetch(`/evolution?${params}`);
       if (!r.ok) throw new Error('Failed to fetch');
       const data = await r.json() as { items: EvolutionItem[] };
       setItems(data.items ?? []);

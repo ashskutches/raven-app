@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/api.js';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,9 +30,9 @@ export default function AshProfileScreen() {
   const fetchAll = useCallback(async () => {
     try {
       const [factsRes, goalsRes, libraryRes] = await Promise.all([
-        fetch(`${API}/library/facts`),
-        fetch(`${API}/goals?status=active,in_progress`),
-        fetch(`${API}/library?types=user_fact,insight,family,goal_context&limit=50`),
+        apiFetch(`/library/facts`),
+        apiFetch(`/goals?status=active,in_progress`),
+        apiFetch(`/library?types=user_fact,insight,family,goal_context&limit=50`),
       ]);
 
       if (factsRes.ok) setFacts(await factsRes.json() as Fact[]);
