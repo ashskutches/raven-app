@@ -14,6 +14,9 @@ const SUGGESTIONS = [
 ];
 
 const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'http://localhost:4000';
+// Proxy chat through Next.js server to avoid CORS + baked-URL issues
+const CHAT_URL = '/api/chat';
+
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -53,7 +56,7 @@ export default function ChatScreen() {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       history.push({ role: 'user', content: text });
 
-      const response = await fetch(`${RAVEN_API}/chat`, {
+      const response = await fetch(CHAT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: history, conversationId }),
