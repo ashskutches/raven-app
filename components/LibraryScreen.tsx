@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, X } from 'lucide-react';
 
 type LibraryEntry = {
   id: string;
@@ -42,6 +43,18 @@ export default function LibraryScreen() {
   const [activeTab, setActiveTab] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<LibraryEntry | null>(null);
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return entries;
+    const q = search.toLowerCase();
+    return entries.filter(e =>
+      e.title.toLowerCase().includes(q) ||
+      e.content.toLowerCase().includes(q) ||
+      (e.summary ?? '').toLowerCase().includes(q) ||
+      (e.tags ?? []).some(t => t.toLowerCase().includes(q))
+    );
+  }, [entries, search]);
 
   useEffect(() => {
     const url = activeTab
@@ -60,6 +73,23 @@ export default function LibraryScreen() {
 
   return (
     <div className="library-container">
+      {/* Search */}
+      <div className="library-search">
+        <Search size={14} className="library-search-icon" />
+        <input
+          type="text"
+          className="library-search-input"
+          placeholder="Search library..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && (
+          <button className="library-search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
       <div className="library-tabs">
         {TABS.map(tab => (
           <button
@@ -88,37 +118,43 @@ export default function LibraryScreen() {
         </div>
       ) : (
         <div className="library-grid">
-          {entries.map((entry, i) => (
-            <motion.div
-              key={entry.id}
-              className="library-card"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04, duration: 0.2 }}
-              onClick={() => setSelected(entry)}
-            >
-              <div className="library-card-header">
-                <span className={`library-type-badge ${TYPE_COLORS[entry.type] ?? ''}`}>
-                  {entry.type.replace('_', ' ')}
-                </span>
-              </div>
-              <div className="library-card-title">{entry.title}</div>
-              <div className="library-card-summary">
-                {entry.summary || entry.content.slice(0, 120) + '...'}
-              </div>
-              {entry.tags?.length > 0 && (
-                <div className="library-tags">
-                  {entry.tags.slice(0, 4).map(tag => (
-                    <span key={tag} className="library-tag">{tag}</span>
-                  ))}
+          <AnimatePresence>
+            {filtered.map((entry, i) => (
+              <motion.div
+                key={entry.id}
+                className="library-card"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ delay: i * 0.03, duration: 0.2 }}
+                onClick={() => setSelected(entry)}
+              >
+                <div className="library-card-header">
+                  <span className={`library-type-badge ${TYPE_COLORS[entry.type] ?? ''}`}>
+                    {entry.type.replace('_', ' ')}
+                  </span>
+                  <span className="library-confidence">
+                    {Math.round((entry.confidence ?? 0.8) * 100)}% confidence
+                  </span>
                 </div>
-              )}
-              <div className="library-card-footer">
-                <span>{entry.source.replace('_', ' ')}</span>
-                <span>{new Date(entry.updated_at).toLocaleDateString()}</span>
-              </div>
-            </motion.div>
-          ))}
+                <div className="library-card-title">{entry.title}</div>
+                <div className="library-card-summary">
+                  {entry.summary || entry.content.slice(0, 120) + '...'}
+                </div>
+                {entry.tags?.length > 0 && (
+                  <div className="library-tags">
+                    {entry.tags.slice(0, 4).map(tag => (
+                      <span key={tag} className="library-tag">{tag}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="library-card-footer">
+                  <span>{entry.source.replace('_', ' ')}</span>
+                  <span>{new Date(entry.updated_at).toLocaleDateString()}</span>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
 

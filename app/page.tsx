@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, BookOpen, LayoutDashboard, Target, Repeat, Sun, Zap } from 'lucide-react';
+import { MessageSquare, BookOpen, LayoutDashboard, Target, Repeat, Sun, Zap, Radio, Calendar } from 'lucide-react';
 import ChatScreen from '@/components/ChatScreen';
 import LibraryScreen from '@/components/LibraryScreen';
 import DashboardScreen from '@/components/DashboardScreen';
@@ -10,9 +10,11 @@ import GoalsScreen from '@/components/GoalsScreen';
 import HabitsScreen from '@/components/HabitsScreen';
 import CheckInScreen from '@/components/CheckInScreen';
 import EvolutionScreen from '@/components/EvolutionScreen';
+import ActivityScreen from '@/components/ActivityScreen';
+import RoutinesScreen from '@/components/RoutinesScreen';
 import AuthGate from '@/components/AuthGate';
 
-type Screen = 'chat' | 'library' | 'dashboard' | 'goals' | 'habits' | 'checkin' | 'evolution';
+type Screen = 'chat' | 'library' | 'dashboard' | 'goals' | 'habits' | 'checkin' | 'evolution' | 'activity' | 'routines';
 
 const SCREEN_TITLES: Record<Screen, string> = {
   chat:       'Chat with Raven',
@@ -22,7 +24,11 @@ const SCREEN_TITLES: Record<Screen, string> = {
   checkin:    'Daily Check-in',
   library:    "Raven's Library",
   evolution:  'Evolution Queue',
+  activity:   'Activity Feed',
+  routines:   "Raven's Routines",
 };
+
+const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>('chat');
@@ -30,10 +36,9 @@ export default function Home() {
 
   // Poll evolution queue summary for nav badge
   useEffect(() => {
-    const API = process.env.NEXT_PUBLIC_RAVEN_API_URL ?? '';
     async function fetchSummary() {
       try {
-        const r = await fetch(`${API}/evolution/summary`);
+        const r = await fetch(`${RAVEN_API}/evolution/summary`);
         if (!r.ok) return;
         const data = await r.json() as { total_pending: number; critical: number };
         setEvolutionCount(data.total_pending ?? 0);
@@ -46,12 +51,14 @@ export default function Home() {
 
   const NAV = [
     { id: 'chat',      label: 'Chat',           icon: MessageSquare, badge: 0 },
+    { id: 'activity',  label: 'Activity',        icon: Radio,         badge: 0 },
+    { id: 'library',   label: "Library",         icon: BookOpen,      badge: 0 },
+    { id: 'routines',  label: 'Routines',        icon: Calendar,      badge: 0 },
+    { id: 'goals',     label: 'Goals',           icon: Target,        badge: 0 },
+    { id: 'habits',    label: 'Habits',          icon: Repeat,        badge: 0 },
+    { id: 'checkin',   label: 'Daily Check-in',  icon: Sun,           badge: 0 },
     { id: 'dashboard', label: 'Dashboard',       icon: LayoutDashboard, badge: 0 },
-    { id: 'goals',     label: 'Goals',           icon: Target, badge: 0 },
-    { id: 'habits',    label: 'Habits',          icon: Repeat, badge: 0 },
-    { id: 'checkin',   label: 'Daily Check-in',  icon: Sun, badge: 0 },
-    { id: 'library',   label: "Raven's Library", icon: BookOpen, badge: 0 },
-    { id: 'evolution', label: 'Evolve',          icon: Zap, badge: evolutionCount },
+    { id: 'evolution', label: 'Evolve',          icon: Zap,           badge: evolutionCount },
   ] as const;
 
   return (
@@ -113,11 +120,13 @@ export default function Home() {
               style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
             >
               {screen === 'chat'      && <ChatScreen />}
-              {screen === 'dashboard' && <DashboardScreen />}
+              {screen === 'activity'  && <ActivityScreen />}
+              {screen === 'library'   && <LibraryScreen />}
+              {screen === 'routines'  && <RoutinesScreen />}
               {screen === 'goals'     && <GoalsScreen />}
               {screen === 'habits'    && <HabitsScreen />}
               {screen === 'checkin'   && <CheckInScreen />}
-              {screen === 'library'   && <LibraryScreen />}
+              {screen === 'dashboard' && <DashboardScreen />}
               {screen === 'evolution' && <EvolutionScreen onResolved={() => setEvolutionCount(c => Math.max(0, c - 1))} />}
             </motion.div>
           </AnimatePresence>
