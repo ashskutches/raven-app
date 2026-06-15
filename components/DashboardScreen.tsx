@@ -58,7 +58,7 @@ export default function DashboardScreen() {
       color: 'var(--color-lavender)',
     },
     {
-      label: 'Facts About Robert',
+      label: 'Facts About Ash',
       value: libStats.byType['user_fact'] ?? 0,
       icon: TrendingUp,
       color: 'var(--color-gold)',

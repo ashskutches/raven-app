@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, BookOpen, LayoutDashboard, Target, Repeat, Sun, Zap, Radio, Calendar, Brain, FlaskConical, User } from 'lucide-react';
+import { MessageSquare, BookOpen, LayoutDashboard, Target, Repeat, Sun, Zap, Radio, Calendar, Brain, FlaskConical, User, DollarSign } from 'lucide-react';
 import ChatScreen from '@/components/ChatScreen';
 import LibraryScreen from '@/components/LibraryScreen';
 import DashboardScreen from '@/components/DashboardScreen';
@@ -15,9 +15,10 @@ import RoutinesScreen from '@/components/RoutinesScreen';
 import MindScreen from '@/components/MindScreen';
 import ResearchScreen from '@/components/ResearchScreen';
 import AshProfileScreen from '@/components/AshProfileScreen';
+import CostScreen from '@/components/CostScreen';
 import AuthGate from '@/components/AuthGate';
 
-type Screen = 'chat' | 'library' | 'dashboard' | 'goals' | 'habits' | 'checkin' | 'evolution' | 'activity' | 'routines' | 'mind' | 'research' | 'profile';
+type Screen = 'chat' | 'library' | 'dashboard' | 'goals' | 'habits' | 'checkin' | 'evolution' | 'activity' | 'routines' | 'mind' | 'research' | 'profile' | 'cost';
 
 const SCREEN_TITLES: Record<Screen, string> = {
   chat:       'Chat with Raven',
@@ -32,6 +33,7 @@ const SCREEN_TITLES: Record<Screen, string> = {
   mind:       "Raven's Mind",
   research:   'Research Queue',
   profile:    'About Ash',
+  cost:       'Cost Tracker',
 };
 
 const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
@@ -68,6 +70,7 @@ export default function Home() {
     { id: 'checkin',   label: 'Check-in',    icon: Sun,              badge: 0 },
     { id: 'dashboard', label: 'Dashboard',   icon: LayoutDashboard,  badge: 0 },
     { id: 'evolution', label: 'Evolve',      icon: Zap,              badge: evolutionCount },
+    { id: 'cost',      label: 'Cost',         icon: DollarSign,       badge: 0 },
   ] as const;
 
   return (
@@ -140,6 +143,7 @@ export default function Home() {
               {screen === 'checkin'   && <CheckInScreen />}
               {screen === 'dashboard' && <DashboardScreen />}
               {screen === 'evolution' && <EvolutionScreen onResolved={() => setEvolutionCount(c => Math.max(0, c - 1))} />}
+              {screen === 'cost'      && <CostScreen />}
             </motion.div>
           </AnimatePresence>
         </main>
