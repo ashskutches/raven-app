@@ -223,9 +223,7 @@ export default function EvolutionScreen({ onResolved }: { onResolved: () => void
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (tab !== 'pending' || tab === 'in_progress') params.set('status', tab);
-      else params.set('status', 'pending');
+      const params = new URLSearchParams({ status: tab });
 
       const r = await fetch(`${API}/evolution?${params}`);
       if (!r.ok) throw new Error('Failed to fetch');
