@@ -1,11 +1,11 @@
 'use client';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Zap, BookOpen, Search, MessageSquare, Calendar, Wrench, Heart, Send } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
+
 
 interface ActivityItem {
   id: string;

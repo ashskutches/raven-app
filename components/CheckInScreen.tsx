@@ -1,5 +1,5 @@
 'use client';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,7 +23,7 @@ type Stats = {
   trend: Array<{ date: string; mood: number; energy: number; sleep: number }>;
 };
 
-const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'http://localhost:4000';
+
 
 export default function CheckInScreen() {
   const [today, setToday] = useState<CheckIn | null>(null);

@@ -1,11 +1,11 @@
 'use client';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Target, Heart, Users, Lightbulb, Star, ChevronDown, ChevronUp } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
+
 
 interface Fact { key: string; value: string; confidence?: number; last_updated_at?: string; }
 interface LibraryEntry { id: string; title: string; type: string; content: string; summary?: string; tags?: string[]; confidence?: number; updated_at: string; }

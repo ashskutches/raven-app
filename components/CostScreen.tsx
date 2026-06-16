@@ -1,11 +1,11 @@
 'use client';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DollarSign, Zap, TrendingUp, Clock, RefreshCw, AlertTriangle } from 'lucide-react';
 
-const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
+
 
 // ── Types ─────────────────────────────────────────────────────
 

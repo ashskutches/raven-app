@@ -1,11 +1,11 @@
 'use client';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, MessageCircleQuestion, Lightbulb, Sparkles, Eye, RefreshCw, Check } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
+
 
 interface DialogItem {
   id: string;
@@ -38,6 +38,7 @@ export default function MindScreen() {
   const [loading, setLoading] = useState(true);
   const [reflecting, setReflecting] = useState(false);
   const [showAddressed, setShowAddressed] = useState(false);
+  const reflectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -64,11 +65,14 @@ export default function MindScreen() {
     setReflecting(true);
     try {
       await apiFetch(`/mind/reflect`, { method: 'POST' });
-      setTimeout(fetchItems, 5000); // Refresh after 5s
+      if (reflectTimerRef.current) clearTimeout(reflectTimerRef.current);
+      reflectTimerRef.current = setTimeout(fetchItems, 5000);
     } catch { /* silent */ } finally {
       setTimeout(() => setReflecting(false), 3000);
     }
   }
+
+  useEffect(() => () => { if (reflectTimerRef.current) clearTimeout(reflectTimerRef.current); }, []);
 
   async function markAddressed(id: string) {
     try {

@@ -1,11 +1,10 @@
 'use client';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FlaskConical, Clock, CheckCircle, PlusCircle, X, Play, ChevronDown, ChevronUp } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
 
 interface QueueItem {
   id: string;
@@ -39,8 +38,8 @@ export default function ResearchScreen() {
 
   const fetchItems = useCallback(async () => {
     try {
-      const url = statusFilter === 'all' ? `${API}/research/queue/all` : `${API}/research/queue?status=${statusFilter}`;
-      const r = await fetch(url);
+      const path = statusFilter === 'all' ? `/research/queue/all` : `/research/queue?status=${statusFilter}`;
+      const r = await apiFetch(path);
       if (!r.ok) return;
       setItems(await r.json() as QueueItem[]);
     } catch { /* silent */ } finally {

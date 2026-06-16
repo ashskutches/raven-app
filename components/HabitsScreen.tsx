@@ -1,5 +1,5 @@
 'use client';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -17,7 +17,7 @@ type Habit = {
   completed_today: boolean;
 };
 
-const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'http://localhost:4000';
+
 
 export default function HabitsScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);

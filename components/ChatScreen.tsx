@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles } from 'lucide-react';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
 type Message = { id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean; toolIndicator?: string };
 

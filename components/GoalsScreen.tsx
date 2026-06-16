@@ -1,5 +1,5 @@
 'use client';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -35,7 +35,6 @@ const STATUS_TEXT: Record<string, string> = {
   draft: 'rgba(255,255,255,0.3)',
 };
 
-const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'http://localhost:4000';
 
 export default function GoalsScreen() {
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -50,8 +49,9 @@ export default function GoalsScreen() {
   const load = async () => {
     setLoading(true);
     try {
-      const url = filter === 'all' ? `${RAVEN_API}/goals` : `${RAVEN_API}/goals?status=${filter}`;
-      const data = await fetch(url).then(r => r.json());
+      const url = filter === 'all' ? `/goals` : `/goals?status=${filter}`;
+      const r = await apiFetch(url);
+      const data = await r.json();
       setGoals(Array.isArray(data) ? data : []);
     } catch { /* silent */ } finally {
       setLoading(false);

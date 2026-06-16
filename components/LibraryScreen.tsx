@@ -1,5 +1,5 @@
 'use client';
-import { apiFetch } from '../lib/api.js';
+import { apiFetch } from '../lib/api';
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -37,7 +37,6 @@ const TYPE_COLORS: Record<string, string> = {
   reference: 'badge-reference',
 };
 
-const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'http://localhost:4000';
 
 export default function LibraryScreen() {
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
@@ -58,12 +57,9 @@ export default function LibraryScreen() {
   }, [entries, search]);
 
   useEffect(() => {
-    const url = activeTab
-      ? `${RAVEN_API}/library?type=${activeTab}`
-      : `${RAVEN_API}/library`;
-
+    const path = activeTab ? `/library?type=${activeTab}` : `/library`;
     setLoading(true);
-    fetch(url)
+    apiFetch(path)
       .then(r => r.json())
       .then(data => {
         setEntries(Array.isArray(data) ? data : []);
