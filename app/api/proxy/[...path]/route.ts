@@ -12,16 +12,19 @@
 
 import { NextRequest } from 'next/server';
 
-const RAVEN_API = process.env.RAVEN_API_URL
-  || process.env.NEXT_PUBLIC_RAVEN_API_URL
-  || 'https://raven-api-production.up.railway.app';
 
-const SECRET = process.env.RAVEN_API_SECRET ?? '';
 
 async function handler(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path: pathSegments } = await params;
   const path = pathSegments.join('/');
   const search = req.nextUrl.search;
+
+  // Read at request-time so Railway env vars are always picked up
+  const RAVEN_API = process.env.RAVEN_API_URL
+    || process.env.NEXT_PUBLIC_RAVEN_API_URL
+    || 'https://raven-api-production.up.railway.app';
+  const SECRET = process.env.RAVEN_API_SECRET ?? '';
+
   const url = `${RAVEN_API}/${path}${search}`;
 
   const headers: Record<string, string> = {
