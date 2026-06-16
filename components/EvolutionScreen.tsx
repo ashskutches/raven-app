@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, Zap, Bug, RefreshCw, CheckCircle, Clock, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_RAVEN_API_URL ?? '';
 
 type ItemType = 'error' | 'capability' | 'bug';
 type Status = 'pending' | 'in_progress' | 'resolved' | 'wont_fix';

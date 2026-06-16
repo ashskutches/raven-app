@@ -180,10 +180,10 @@ export default function ResearchScreen() {
               return (
                 <motion.div
                   key={item.id}
-                  layout
-                  initial={{ opacity: 0, y: -6 }}
+                  initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, height: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
                   className="research-item"
                 >
                   <div className="research-item-header" onClick={() => setExpanded(isExpanded ? null : item.id)}>

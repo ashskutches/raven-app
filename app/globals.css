@@ -1639,7 +1639,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .profile-section-body {
   border-top: 1px solid var(--color-border);
   padding: 16px;
-  overflow: hidden;
 }
 
 /* Facts grid */
@@ -1919,7 +1918,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   background: rgba(255,255,255,0.03);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
   transition: border-color 0.15s;
 }
 .research-item:hover { border-color: var(--color-border-strong); }

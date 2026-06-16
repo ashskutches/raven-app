@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, Clock, Play } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
 
 interface Routine {
   id: string;

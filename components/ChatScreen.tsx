@@ -15,9 +15,6 @@ const SUGGESTIONS = [
   "What should I focus on today?",
 ];
 
-const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
-// Proxy chat through Next.js server to avoid CORS + baked-URL issues
-const CHAT_URL = '/api/chat';
 
 
 
@@ -82,12 +79,9 @@ export default function ChatScreen() {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       history.push({ role: 'user', content: text });
 
-      const response = await fetch(`${RAVEN_API}/chat`, {
+      const response = await fetch('/api/proxy/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(process.env.NEXT_PUBLIC_RAVEN_API_SECRET ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_RAVEN_API_SECRET}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: history, conversationId }),
         signal: abortRef.current.signal,
       });
@@ -166,7 +160,7 @@ export default function ChatScreen() {
                 )
               );
               // Report to evolution queue
-              fetch(`${RAVEN_API}/evolution`, {
+              apiFetch('/evolution', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
