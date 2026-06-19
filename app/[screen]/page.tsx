@@ -5,7 +5,7 @@ import { useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, MessageSquare, User, Target, BookOpen,
-  Brain, Radio, Zap, DollarSign,
+  Brain, Radio, Zap, DollarSign, Users,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
@@ -18,12 +18,13 @@ import MindScreen            from '@/components/MindScreen';
 import ActivityScreen        from '@/components/ActivityScreen';
 import EvolutionScreen       from '@/components/EvolutionScreen';
 import CostScreen            from '@/components/CostScreen';
+import ContactsScreen        from '@/components/ContactsScreen';
 import AuthGate              from '@/components/AuthGate';
 
-type Screen = 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'mind' | 'activity' | 'evolution' | 'cost';
+type Screen = 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'mind' | 'activity' | 'evolution' | 'cost' | 'contacts';
 
 const VALID_SCREENS = new Set<Screen>([
-  'dashboard', 'chat', 'profile', 'goals', 'library', 'mind', 'activity', 'evolution', 'cost',
+  'dashboard', 'chat', 'profile', 'goals', 'library', 'mind', 'activity', 'evolution', 'cost', 'contacts',
 ]);
 
 const SCREEN_TITLES: Record<Screen, string> = {
@@ -36,6 +37,7 @@ const SCREEN_TITLES: Record<Screen, string> = {
   activity:  'Activity',
   evolution: 'Evolution Queue',
   cost:      'Cost',
+  contacts:  'Trusted Contacts',
 };
 
 const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof LayoutDashboard }> = [
@@ -46,6 +48,7 @@ const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof LayoutDashboard
   { id: 'library',   label: 'Research',  icon: BookOpen        },
   { id: 'mind',      label: 'Mind',      icon: Brain           },
   { id: 'activity',  label: 'Activity',  icon: Radio           },
+  { id: 'contacts',  label: 'Contacts',  icon: Users           },
   { id: 'evolution', label: 'Evolve',    icon: Zap             },
   { id: 'cost',      label: 'Cost',      icon: DollarSign      },
 ];
@@ -149,6 +152,7 @@ export default function ScreenPage() {
               {screen === 'activity'  && <ActivityScreen />}
               {screen === 'evolution' && <EvolutionScreen onResolved={() => setEvolutionCount(c => Math.max(0, c - 1))} />}
               {screen === 'cost'      && <CostScreen />}
+              {screen === 'contacts'  && <ContactsScreen />}
             </motion.div>
           </AnimatePresence>
         </main>

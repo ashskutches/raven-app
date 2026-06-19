@@ -1,10 +1,11 @@
 'use client';
 import { apiFetch } from '../lib/api';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, X, FlaskConical, BookOpen, Play, PlusCircle,
-  Clock, CheckCircle, ChevronDown, ChevronUp,
+  Clock, CheckCircle, ChevronDown, ChevronUp, Zap,
+  Lightbulb, MessageSquare, ArrowRight, RotateCcw,
 } from 'lucide-react';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -20,6 +21,20 @@ type QueueItem = {
   status: 'pending' | 'in_progress' | 'completed' | 'skipped';
   created_at: string; completed_at?: string;
 };
+
+interface LiveStep {
+  type: 'status' | 'step' | 'result' | 'error' | 'done';
+  message?: string;
+  step?: string;
+  detail?: string;
+  topic?: string;
+  summary?: string;
+  findings?: string[];
+  insights?: string[];
+  questions?: string[];
+  follow_up_topics?: Array<{ topic: string; rationale: string; priority: number }>;
+  library_entry_id?: string;
+}
 
 /* ─── Config ─────────────────────────────────────────────────── */
 const LIB_TABS = [
@@ -51,7 +66,361 @@ const STATUS_CFG = {
   skipped:     { dot: '⏭',  color: '#64748b' },
 };
 
-/* ─── Research tab ───────────────────────────────────────────── */
+const STEP_LABELS: Record<string, string> = {
+  queue:      '📥 Queuing topic',
+  started:    '🔬 Research started',
+  profile:    '🧠 Loading your context',
+  search:     '🌐 Searching the web',
+  scrape:     '📄 Deep-reading article',
+  synthesize: '✨ Synthesizing findings',
+  saving:     '💾 Saving to library',
+};
+
+/* ─── Research Now tab ───────────────────────────────────────── */
+function ResearchNowTab() {
+  const [topic, setTopic]       = useState('');
+  const [running, setRunning]   = useState(false);
+  const [steps, setSteps]       = useState<LiveStep[]>([]);
+  const [result, setResult]     = useState<LiveStep | null>(null);
+  const [error, setError]       = useState('');
+  const [discussed, setDiscussed] = useState(false);
+  const abortRef                = useRef<AbortController | null>(null);
+  const bottomRef               = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [steps]);
+
+  const run = async () => {
+    if (running) return;
+    setRunning(true);
+    setSteps([]);
+    setResult(null);
+    setError('');
+    setDiscussed(false);
+
+    abortRef.current = new AbortController();
+
+    try {
+      const RAVEN_API = process.env.NEXT_PUBLIC_RAVEN_API_URL || 'https://raven-api-production.up.railway.app';
+      const SECRET    = '';
+
+      // Use proxy for SSE
+      const res = await fetch('/api/proxy/research/run-live', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(topic.trim() ? { topic: topic.trim() } : {}),
+        signal: abortRef.current.signal,
+      });
+
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+
+      const reader  = res.body!.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const evt = JSON.parse(line.slice(6)) as LiveStep;
+            if (evt.type === 'done') break;
+            if (evt.type === 'error') { setError(evt.message ?? 'Unknown error'); break; }
+            if (evt.type === 'result') { setResult(evt); }
+            setSteps(prev => [...prev, evt]);
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setError((err as Error).message);
+      }
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const reset = () => {
+    abortRef.current?.abort();
+    setSteps([]);
+    setResult(null);
+    setError('');
+    setRunning(false);
+    setDiscussed(false);
+  };
+
+  const openChat = () => {
+    if (!result) return;
+    // Navigate to chat with a pre-filled message about this research
+    const msg = `Let's talk about what you just found on "${result.topic}". What's most relevant to me right now?`;
+    // Store in sessionStorage for ChatScreen to pick up
+    try { sessionStorage.setItem('raven_prefill', msg); } catch {}
+    window.location.href = '/chat';
+  };
+
+  const isIdle = !running && steps.length === 0 && !result;
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Topic input */}
+      <div style={{
+        padding: '20px 22px',
+        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
+        borderRadius: 16,
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Research a topic right now</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14, lineHeight: 1.6 }}>
+          Leave blank to research the top-priority item in Raven's queue, or type something specific.
+          Raven will search the web, synthesize findings for your situation, and save everything to her library.
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input
+            value={topic}
+            onChange={e => setTopic(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !running && run()}
+            placeholder="e.g. sleep apnea and energy levels, habit stacking for ADHD..."
+            disabled={running}
+            style={{
+              flex: 1, padding: '10px 14px',
+              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.14)',
+              borderRadius: 10, color: 'var(--color-text)', fontSize: 13,
+              outline: 'none', fontFamily: 'var(--font-sans)',
+            }}
+          />
+          {(running || result) ? (
+            <button className="btn btn-ghost" onClick={reset} style={{ gap: 6, flexShrink: 0 }}>
+              <RotateCcw size={13} /> Reset
+            </button>
+          ) : (
+            <button
+              className="btn btn-primary"
+              onClick={run}
+              disabled={running}
+              style={{ gap: 6, flexShrink: 0 }}
+            >
+              <Zap size={13} /> Research Now
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Live progress */}
+      {steps.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          style={{
+            padding: '18px 20px',
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 16,
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+            Live Progress
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {steps.filter(s => s.type === 'status' || s.type === 'step').map((s, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}
+              >
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  background: i === steps.filter(s2 => s2.type === 'status' || s2.type === 'step').length - 1 && running
+                    ? 'rgba(251,191,36,0.2)' : 'rgba(52,211,153,0.15)',
+                  border: `1px solid ${i === steps.filter(s2 => s2.type === 'status' || s2.type === 'step').length - 1 && running ? '#fbbf24' : '#34d399'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1,
+                }}>
+                  {i === steps.filter(s2 => s2.type === 'status' || s2.type === 'step').length - 1 && running
+                    ? <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fbbf24', animation: 'pulse 1s infinite' }} />
+                    : <CheckCircle size={11} color="#34d399" />
+                  }
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)' }}>
+                    {s.type === 'step' && s.step ? (STEP_LABELS[s.step] ?? s.step) : s.message}
+                  </div>
+                  {s.type === 'step' && s.detail && (
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 1 }}>{s.detail}</div>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          <div ref={bottomRef} />
+        </motion.div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          style={{
+            padding: '14px 16px', borderRadius: 12,
+            background: 'rgba(251,113,133,0.08)', border: '1px solid rgba(251,113,133,0.2)',
+            fontSize: 13, color: '#fda4af',
+          }}
+        >
+          ❌ {error}
+        </motion.div>
+      )}
+
+      {/* Result card */}
+      {result && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          style={{
+            borderRadius: 18, overflow: 'hidden',
+            border: '1px solid rgba(167,139,250,0.25)',
+            background: 'rgba(15,12,31,0.95)',
+          }}
+        >
+          {/* Header */}
+          <div style={{
+            padding: '18px 22px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+            background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(124,58,237,0.08))',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <FlaskConical size={16} style={{ color: 'var(--color-lavender)' }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-lavender)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Research Complete</span>
+            </div>
+            <h3 style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.3, letterSpacing: '-0.3px' }}>{result.topic}</h3>
+          </div>
+
+          <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Key Findings */}
+            {result.findings && result.findings.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-lavender)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                  Key Findings
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {result.findings.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-lavender)', flexShrink: 0, marginTop: 7 }} />
+                      <span style={{ fontSize: 13, lineHeight: 1.65, color: 'var(--color-text)' }}>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* How It Applies */}
+            {result.summary && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                  How This Applies to You
+                </div>
+                <p style={{ fontSize: 13, lineHeight: 1.75, color: 'var(--color-text-muted)', margin: 0 }}>{result.summary}</p>
+              </div>
+            )}
+
+            {/* Actionable Insights */}
+            {result.insights && result.insights.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                  <Lightbulb size={11} style={{ display: 'inline', marginRight: 5 }} />
+                  What You Can Do
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {result.insights.map((ins, i) => (
+                    <div key={i} style={{
+                      display: 'flex', gap: 10, alignItems: 'flex-start',
+                      padding: '10px 12px', borderRadius: 10,
+                      background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.12)',
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: '#34d399', flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+                      <span style={{ fontSize: 13, lineHeight: 1.6 }}>{ins}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Questions */}
+            {result.questions && result.questions.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                  <MessageSquare size={11} style={{ display: 'inline', marginRight: 5 }} />
+                  Questions This Raises
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {result.questions.map((q, i) => (
+                    <div key={i} style={{
+                      fontSize: 13, lineHeight: 1.6, padding: '10px 12px', borderRadius: 10,
+                      background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.12)',
+                      fontStyle: 'italic', color: 'var(--color-text)',
+                    }}>
+                      "{q}"
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Follow-up topics */}
+            {result.follow_up_topics && result.follow_up_topics.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                  Queued for Follow-up Research
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {result.follow_up_topics.map((ft, i) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      fontSize: 12, color: 'var(--color-text-muted)',
+                      padding: '7px 10px', borderRadius: 8,
+                      background: 'rgba(255,255,255,0.03)',
+                    }}>
+                      <ArrowRight size={11} style={{ flexShrink: 0, color: 'var(--color-text-subtle)' }} />
+                      {ft.topic}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+              <button
+                className="btn btn-primary"
+                onClick={openChat}
+                style={{ gap: 7, flex: 1, justifyContent: 'center' }}
+              >
+                <MessageSquare size={13} /> Discuss with Raven
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={reset}
+                style={{ gap: 6 }}
+              >
+                <Zap size={12} /> Research Another
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Idle state */}
+      {isIdle && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-text-muted)' }}
+        >
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🔬</div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Ready to research</div>
+          <div style={{ fontSize: 13, color: 'var(--color-text-subtle)', maxWidth: 360, margin: '0 auto', lineHeight: 1.65 }}>
+            Hit "Research Now" and Raven will pick the top queued topic, search the web, synthesize it for your situation, and bring the results here live.
+          </div>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Research Queue tab ─────────────────────────────────────── */
 function ResearchTab() {
   const [items,        setItems]        = useState<QueueItem[]>([]);
   const [loading,      setLoading]      = useState(true);
@@ -330,7 +699,7 @@ function LibraryTab() {
 
 /* ─── Root: Research & Library ───────────────────────────────── */
 export default function ResearchLibraryScreen() {
-  const [tab, setTab] = useState<'research' | 'library'>('research');
+  const [tab, setTab] = useState<'now' | 'queue' | 'library'>('queue');
 
   return (
     <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -341,8 +710,15 @@ export default function ResearchLibraryScreen() {
         display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
       }}>
         <button
-          className={`tab ${tab === 'research' ? 'active' : ''}`}
-          onClick={() => setTab('research')}
+          className={`tab ${tab === 'now' ? 'active' : ''}`}
+          onClick={() => setTab('now')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <Zap size={14} /> Research Now
+        </button>
+        <button
+          className={`tab ${tab === 'queue' ? 'active' : ''}`}
+          onClick={() => setTab('queue')}
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <FlaskConical size={14} /> Research Queue
@@ -364,7 +740,9 @@ export default function ResearchLibraryScreen() {
           transition={{ duration: 0.15 }}
           style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
         >
-          {tab === 'research' ? <ResearchTab /> : <LibraryTab />}
+          {tab === 'now'     ? <ResearchNowTab /> :
+           tab === 'queue'   ? <ResearchTab />    :
+                               <LibraryTab />}
         </motion.div>
       </AnimatePresence>
     </div>
