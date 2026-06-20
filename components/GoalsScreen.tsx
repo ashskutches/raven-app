@@ -128,12 +128,12 @@ export default function GoalsScreen() {
   /* ── Fetch ── */
   const fetchAll = useCallback(async () => {
     try {
-      const [todosData, goalsData] = await Promise.all([
-        apiFetch('/todos') as Promise<unknown>,
-        apiFetch('/goals?status=active') as Promise<unknown>,
+      const [todosRes, goalsRes] = await Promise.all([
+        apiFetch('/todos'),
+        apiFetch('/goals?status=active'),
       ]);
-      setTodos(todosData as Todo[]);
-      setGoals(goalsData as Goal[]);
+      if (todosRes.ok) setTodos(await todosRes.json() as Todo[]);
+      if (goalsRes.ok) setGoals(await goalsRes.json() as Goal[]);
     } catch { /* silent */ }
     finally { setLoading(false); }
   }, []);
@@ -159,7 +159,7 @@ export default function GoalsScreen() {
     if (!title) return;
     setAddingGoal(true);
     try {
-      const created = await apiFetch('/goals', {
+      const res = await apiFetch('/goals', {
         method: 'POST',
         body: JSON.stringify({
           title,
@@ -168,7 +168,9 @@ export default function GoalsScreen() {
           category: goalCategory.trim() || undefined,
           target_date: goalTargetDate || undefined,
         }),
-      }) as unknown as { id: string };
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const created = await res.json() as { id: string };
 
       const newGoal: Goal = {
         id: created.id,
@@ -213,14 +215,14 @@ export default function GoalsScreen() {
     await apiFetch(`/goals/${goal.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ status: newStatus, progress: newProgress }),
-    });
+    }).catch(() => {});
   };
 
   /* ── Update goal progress ── */
   const updateGoalProgress = async (goalId: string, progress: number) => {
     const clamped = Math.max(0, Math.min(100, progress));
     setGoals(prev => prev.map(g => g.id === goalId ? { ...g, progress: clamped } : g));
-    await apiFetch(`/goals/${goalId}`, { method: 'PATCH', body: JSON.stringify({ progress: clamped }) });
+    await apiFetch(`/goals/${goalId}`, { method: 'PATCH', body: JSON.stringify({ progress: clamped }) }).catch(() => {});
   };
 
   /* ── Add todo ── */
@@ -229,15 +231,18 @@ export default function GoalsScreen() {
     if (!title) return;
     setAddingTodo(true);
     try {
-      const created = await apiFetch('/todos', {
+      const res = await apiFetch('/todos', {
         method: 'POST',
         body: JSON.stringify({
           title,
           priority: newPriority,
           goal_id: newGoalId || null,
         }),
-      }) as unknown as Todo;
-      setTodos(prev => [...prev, created]);
+      });
+      if (res.ok) {
+        const created = await res.json() as Todo;
+        setTodos(prev => [...prev, created]);
+      }
       setNewTitle('');
       setNewPriority(3);
       // Don't clear goal selection — user probably wants to add more to same goal
