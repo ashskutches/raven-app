@@ -5,7 +5,7 @@ import { useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, MessageSquare, User, Target, BookOpen,
-  Brain, Radio, Zap, DollarSign, Users,
+  Brain, Radio, Zap, DollarSign, Users, Heart,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
@@ -19,12 +19,13 @@ import ActivityScreen        from '@/components/ActivityScreen';
 import EvolutionScreen       from '@/components/EvolutionScreen';
 import CostScreen            from '@/components/CostScreen';
 import ContactsScreen        from '@/components/ContactsScreen';
+import PeopleScreen          from '@/components/PeopleScreen';
 import AuthGate              from '@/components/AuthGate';
 
-type Screen = 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'mind' | 'activity' | 'evolution' | 'cost' | 'contacts';
+type Screen = 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'mind' | 'activity' | 'evolution' | 'cost' | 'contacts' | 'people';
 
 const VALID_SCREENS = new Set<Screen>([
-  'dashboard', 'chat', 'profile', 'goals', 'library', 'mind', 'activity', 'evolution', 'cost', 'contacts',
+  'dashboard', 'chat', 'profile', 'goals', 'library', 'mind', 'activity', 'evolution', 'cost', 'contacts', 'people',
 ]);
 
 const SCREEN_TITLES: Record<Screen, string> = {
@@ -38,6 +39,7 @@ const SCREEN_TITLES: Record<Screen, string> = {
   evolution: 'Evolution Queue',
   cost:      'Cost',
   contacts:  'Trusted Contacts',
+  people:    'People',
 };
 
 const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof LayoutDashboard }> = [
@@ -49,6 +51,7 @@ const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof LayoutDashboard
   { id: 'mind',      label: 'Mind',      icon: Brain           },
   { id: 'activity',  label: 'Activity',  icon: Radio           },
   { id: 'contacts',  label: 'Contacts',  icon: Users           },
+  { id: 'people',    label: 'People',    icon: Heart           },
   { id: 'evolution', label: 'Evolve',    icon: Zap             },
   { id: 'cost',      label: 'Cost',      icon: DollarSign      },
 ];
@@ -153,6 +156,7 @@ export default function ScreenPage() {
               {screen === 'evolution' && <EvolutionScreen onResolved={() => setEvolutionCount(c => Math.max(0, c - 1))} />}
               {screen === 'cost'      && <CostScreen />}
               {screen === 'contacts'  && <ContactsScreen />}
+              {screen === 'people'    && <PeopleScreen />}
             </motion.div>
           </AnimatePresence>
         </main>
