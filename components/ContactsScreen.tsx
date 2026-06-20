@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../lib/api';
 import {
   Users, Plus, Trash2, Edit3, Check, X, ChevronDown,
-  Shield, MessageSquare, Star, RefreshCw, Search, Server,
+  Shield, MessageSquare, Star, RefreshCw, Search, Server, Hand,
 } from 'lucide-react';
 
 /* ─── Types ──────────────────────────────────────────────────────── */
@@ -515,6 +515,29 @@ export default function ContactsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  const [sayingHello, setSayingHello] = useState<string | null>(null); // contact ID being greeted
+  const [helloResult, setHelloResult] = useState<{ id: string; ok: boolean; msg: string } | null>(null);
+
+  const sayHello = async (contact: Contact) => {
+    if (!contact.discord_user_id) return;
+    setSayingHello(contact.id);
+    setHelloResult(null);
+    try {
+      const r = await apiFetch(`/contacts/${contact.id}/say-hello`, { method: 'POST' });
+      const d = await r.json() as { sent?: boolean; name?: string; error?: string };
+      if (r.ok && d.sent) {
+        setHelloResult({ id: contact.id, ok: true, msg: `Raven said hello to ${d.name ?? contact.name} on Discord!` });
+      } else {
+        setHelloResult({ id: contact.id, ok: false, msg: d.error ?? 'Failed to send greeting' });
+      }
+    } catch (e) {
+      setHelloResult({ id: contact.id, ok: false, msg: (e as Error).message });
+    } finally {
+      setSayingHello(null);
+      setTimeout(() => setHelloResult(null), 4000);
+    }
+  };
+
   const handleUpdate = async (id: string, updates: Partial<Contact>) => {
     try {
       await apiFetch(`/contacts/${id}`, {
@@ -689,6 +712,33 @@ export default function ContactsScreen() {
 
                   <PermissionPill contact={c} onUpdate={handleUpdate} />
 
+                  {/* Say Hello button — only if contact has Discord */}
+                  {c.discord_user_id && (
+                    <button
+                      onClick={() => sayHello(c)}
+                      disabled={sayingHello === c.id}
+                      aria-label={`Say hello to ${c.name}`}
+                      title="Raven introduces herself via Discord DM"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        padding: '5px 10px',
+                        background: sayingHello === c.id ? 'rgba(52,211,153,0.08)' : 'rgba(52,211,153,0.1)',
+                        border: '1px solid rgba(52,211,153,0.25)',
+                        borderRadius: 8, cursor: sayingHello === c.id ? 'wait' : 'pointer',
+                        color: '#34d399', fontSize: 11, fontWeight: 600,
+                        fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap',
+                        transition: 'all 0.15s',
+                        opacity: sayingHello === c.id ? 0.7 : 1,
+                      }}
+                      onMouseEnter={e => { if (sayingHello !== c.id) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(52,211,153,0.2)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(52,211,153,0.1)'; }}
+                      id={`say-hello-${c.id}`}
+                    >
+                      <Hand size={11} />
+                      {sayingHello === c.id ? 'Saying hi...' : 'Say Hello'}
+                    </button>
+                  )}
+
                   <button
                     onClick={() => handleRemove(c.id)}
                     aria-label={`Remove ${c.name}`}
@@ -753,6 +803,31 @@ export default function ContactsScreen() {
             onClose={() => setShowAdd(false)}
             onAdded={load}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Say Hello result toast */}
+      <AnimatePresence>
+        {helloResult && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              position: 'fixed', bottom: 28, right: 28, zIndex: 9999,
+              padding: '12px 18px', borderRadius: 12, maxWidth: 320,
+              background: helloResult.ok ? 'rgba(16,40,30,0.96)' : 'rgba(40,16,18,0.96)',
+              border: `1px solid ${helloResult.ok ? 'rgba(52,211,153,0.4)' : 'rgba(248,113,113,0.4)'}`,
+              color: helloResult.ok ? '#34d399' : '#f87171',
+              fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-sans)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              backdropFilter: 'blur(12px)',
+            }}
+            role="alert"
+          >
+            {helloResult.ok ? '👋 ' : '⚠️ '}{helloResult.msg}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
