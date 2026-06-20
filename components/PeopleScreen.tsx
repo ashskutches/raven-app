@@ -240,8 +240,9 @@ function PersonModal({ initial, onClose, onSaved }: {
         discord_user_id: form.discord_user_id.trim() || null,
       };
       const p: Person = initial
-        ? await apiFetch(`/people/${initial.id}`, { method: 'PATCH', body: JSON.stringify(body) })
-        : await apiFetch('/people', { method: 'POST', body: JSON.stringify(body) });
+        ? await apiFetch(`/people/${initial.id}`, { method: 'PATCH', body: JSON.stringify(body) }) as Person
+        : await apiFetch('/people', { method: 'POST', body: JSON.stringify(body) }) as Person;
+
       onSaved(p);
     } catch (e) {
       setError((e as Error).message);
@@ -332,7 +333,7 @@ function PersonCard({
     if (notes.length > 0) return;
     setLoadingNotes(true);
     try {
-      const data = await apiFetch(`/people/${person.id}/notes`);
+      const data = await apiFetch(`/people/${person.id}/notes`) as ContactNote[];
       setNotes(data);
     } catch { /* ignore */ }
     setLoadingNotes(false);
@@ -342,7 +343,7 @@ function PersonCard({
     if (!newNote.trim()) return;
     setAddingNote(true);
     try {
-      const note = await apiFetch(`/people/${person.id}/notes`, { method: 'POST', body: JSON.stringify({ note: newNote.trim(), source: 'manual' }) });
+      const note = await apiFetch(`/people/${person.id}/notes`, { method: 'POST', body: JSON.stringify({ note: newNote.trim(), source: 'manual' }) }) as ContactNote;
       setNotes(prev => [note, ...prev]);
       setNewNote('');
     } catch { /* ignore */ }
@@ -520,7 +521,7 @@ export default function PeopleScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiFetch('/people');
+      const data = await apiFetch('/people') as Person[];
       setPeople(data);
     } catch { /* ignore */ }
     setLoading(false);
@@ -531,7 +532,7 @@ export default function PeopleScreen() {
   async function syncDiscord() {
     setSyncing(true); setSyncResult('');
     try {
-      const result = await apiFetch('/people/sync/discord', { method: 'POST' });
+      const result = await apiFetch('/people/sync/discord', { method: 'POST' }) as { message?: string; imported: number; updated: number };
       setSyncResult(result.message ?? `Imported ${result.imported}, updated ${result.updated}`);
       await load();
     } catch (e) {
@@ -550,7 +551,7 @@ export default function PeopleScreen() {
     const updated = await apiFetch(`/people/${person.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ can_raven_contact: !person.can_raven_contact }),
-    });
+    }) as Person;
     setPeople(p => p.map(x => x.id === person.id ? { ...x, ...updated } : x));
   }
 
