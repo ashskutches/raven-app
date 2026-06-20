@@ -171,6 +171,7 @@ export default function ActivityScreen() {
                       <motion.pre
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
+                        style={{ overflow: 'hidden' }}
                         className="activity-detail"
                       >
                         {JSON.stringify(item.detail, null, 2)}

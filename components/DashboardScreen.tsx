@@ -150,6 +150,7 @@ export default function DashboardScreen({ onNavigate }: DashboardProps) {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             style={{
+              overflow: 'hidden',
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '12px 18px', marginBottom: 20,
               background: 'rgba(251,113,133,0.08)',

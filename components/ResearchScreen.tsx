@@ -3,8 +3,8 @@ import { apiFetch } from '../lib/api';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FlaskConical, Clock, CheckCircle, PlusCircle, X, Play, ChevronDown, ChevronUp } from 'lucide-react';
-
+import { FlaskConical, Clock, CheckCircle, PlusCircle, X, Play, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { Collapse } from './Collapse';
 
 interface QueueItem {
   id: string;
@@ -14,6 +14,12 @@ interface QueueItem {
   status: 'pending' | 'in_progress' | 'completed' | 'skipped';
   created_at: string;
   completed_at?: string;
+}
+
+interface TidyResult {
+  summary: string;
+  removed_library: number;
+  removed_queue: number;
 }
 
 const STATUS_CONFIG = {
@@ -27,14 +33,16 @@ const PRIORITY_LABELS: Record<number, string> = { 5: 'Critical', 4: 'High', 3: '
 const PRIORITY_COLORS: Record<number, string> = { 5: '#f87171', 4: '#fb923c', 3: '#60a5fa', 2: '#94a3b8', 1: '#475569' };
 
 export default function ResearchScreen() {
-  const [items, setItems] = useState<QueueItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems]               = useState<QueueItem[]>([]);
+  const [loading, setLoading]           = useState(true);
   const [statusFilter, setStatusFilter] = useState<'pending' | 'completed' | 'all'>('pending');
-  const [running, setRunning] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newTopic, setNewTopic] = useState('');
+  const [running, setRunning]           = useState(false);
+  const [tidying, setTidying]           = useState(false);
+  const [tidyResult, setTidyResult]     = useState<TidyResult | null>(null);
+  const [showAdd, setShowAdd]           = useState(false);
+  const [newTopic, setNewTopic]         = useState('');
   const [newRationale, setNewRationale] = useState('');
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded]         = useState<string | null>(null);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -60,6 +68,22 @@ export default function ResearchScreen() {
     }
   }
 
+  async function triggerTidy() {
+    setTidying(true);
+    setTidyResult(null);
+    try {
+      const r = await apiFetch(`/research/tidy`, { method: 'POST' });
+      if (r.ok) {
+        const data = await r.json() as TidyResult;
+        setTidyResult(data);
+        // Refresh the list after tidy
+        setTimeout(fetchItems, 1000);
+      }
+    } catch { /* silent */ } finally {
+      setTidying(false);
+    }
+  }
+
   async function addTopic() {
     if (!newTopic.trim()) return;
     try {
@@ -80,7 +104,7 @@ export default function ResearchScreen() {
     setItems(prev => prev.filter(i => i.id !== id));
   }
 
-  const pending = items.filter(i => i.status === 'pending').length;
+  const pending   = items.filter(i => i.status === 'pending').length;
   const completed = items.filter(i => i.status === 'completed').length;
 
   return (
@@ -101,6 +125,25 @@ export default function ResearchScreen() {
           </div>
         </div>
         <div className="research-actions">
+          {/* Tidy Up button */}
+          <button
+            id="research-tidy-btn"
+            className={`research-run-btn ${tidying ? 'running' : ''}`}
+            onClick={triggerTidy}
+            disabled={tidying}
+            title="Remove redundant, stale, or low-quality research from library and queue"
+            style={{
+              background: tidying
+                ? 'rgba(251,191,36,0.15)'
+                : 'rgba(251,191,36,0.08)',
+              borderColor: 'rgba(251,191,36,0.25)',
+              color: '#fbbf24',
+            }}
+          >
+            <Sparkles size={12} className={tidying ? 'spinning' : ''} />
+            {tidying ? 'Tidying...' : 'Tidy Up'}
+          </button>
+
           <button className="research-add-btn" onClick={() => setShowAdd(v => !v)}>
             <PlusCircle size={13} /> Add topic
           </button>
@@ -115,41 +158,71 @@ export default function ResearchScreen() {
         </div>
       </div>
 
-      {/* Add topic form */}
+      {/* Tidy result banner */}
       <AnimatePresence>
-        {showAdd && (
+        {tidyResult && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="research-add-form"
+            style={{ overflow: 'hidden' }}
           >
-            <input
-              className="research-input"
-              placeholder="Research topic..."
-              value={newTopic}
-              onChange={e => setNewTopic(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addTopic()}
-              autoFocus
-            />
-            <input
-              className="research-input"
-              placeholder="Why is this relevant to Ash? (optional)"
-              value={newRationale}
-              onChange={e => setNewRationale(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addTopic()}
-            />
-            <div className="research-add-actions">
-              <button className="btn btn-primary" style={{ fontSize: 13, padding: '8px 16px' }} onClick={addTopic}>
-                Add to Queue
-              </button>
-              <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setShowAdd(false)}>
-                Cancel
-              </button>
+            <div style={{
+              margin: '0 0 14px',
+              padding: '12px 16px',
+              background: 'rgba(251,191,36,0.07)',
+              border: '1px solid rgba(251,191,36,0.2)',
+              borderRadius: 10,
+              fontSize: 13,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                <span style={{ color: '#fbbf24', fontWeight: 600 }}>
+                  ✨ Tidy complete — {tidyResult.removed_library} library entries + {tidyResult.removed_queue} queue items removed
+                </span>
+                <button
+                  onClick={() => setTidyResult(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 2 }}
+                  aria-label="Dismiss"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              {tidyResult.summary && (
+                <p style={{ marginTop: 6, color: 'var(--color-text-muted)', lineHeight: 1.5, fontSize: 12 }}>
+                  {tidyResult.summary}
+                </p>
+              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Add topic form */}
+      <Collapse open={showAdd} className="research-add-form">
+        <input
+          className="research-input"
+          placeholder="Research topic..."
+          value={newTopic}
+          onChange={e => setNewTopic(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addTopic()}
+          autoFocus
+        />
+        <input
+          className="research-input"
+          placeholder="Why is this relevant to Ash? (optional)"
+          value={newRationale}
+          onChange={e => setNewRationale(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addTopic()}
+        />
+        <div className="research-add-actions">
+          <button className="btn btn-primary" style={{ fontSize: 13, padding: '8px 16px' }} onClick={addTopic}>
+            Add to Queue
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setShowAdd(false)}>
+            Cancel
+          </button>
+        </div>
+      </Collapse>
 
       {/* Status filter */}
       <div className="research-filters">
@@ -216,18 +289,9 @@ export default function ResearchScreen() {
                     </div>
                   </div>
 
-                  <AnimatePresence>
-                    {isExpanded && item.rationale && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="research-item-rationale"
-                      >
-                        <strong>Why Raven wants to research this:</strong> {item.rationale}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  <Collapse open={isExpanded && !!item.rationale} className="research-item-rationale">
+                    <strong>Why Raven wants to research this:</strong> {item.rationale}
+                  </Collapse>
                 </motion.div>
               );
             })}

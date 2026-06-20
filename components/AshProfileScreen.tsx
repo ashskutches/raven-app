@@ -1,31 +1,29 @@
 'use client';
 import { apiFetch } from '../lib/api';
-
 import { useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { User, Target, Heart, Users, Lightbulb, Star, ChevronDown, ChevronUp } from 'lucide-react';
-
-
+import { motion } from 'framer-motion';
+import { Collapse } from './Collapse';
 
 interface Fact { key: string; value: string; confidence?: number; last_updated_at?: string; }
 interface LibraryEntry { id: string; title: string; type: string; content: string; summary?: string; tags?: string[]; confidence?: number; updated_at: string; }
 interface Goal { id: string; title: string; description?: string; status: string; progress: number; why?: string; target_date?: string; }
 
 const SECTION_CONFIG = {
-  facts:       { icon: <User size={15} />,        label: 'Key Facts',       color: '#a78bfa', desc: 'Core facts Raven knows about you' },
-  goals:       { icon: <Target size={15} />,      label: 'Active Goals',    color: '#60a5fa', desc: 'What you\'re working toward' },
-  user_fact:   { icon: <Heart size={15} />,       label: 'About Ash',       color: '#f472b6', desc: 'Personal context Raven has learned' },
+  facts:       { icon: <User size={15} />,        label: 'Key Facts',         color: '#a78bfa', desc: 'Core facts Raven knows about you' },
+  goals:       { icon: <Target size={15} />,      label: 'Active Goals',      color: '#60a5fa', desc: 'What you\'re working toward' },
+  user_fact:   { icon: <Heart size={15} />,       label: 'About Ash',         color: '#f472b6', desc: 'Personal context Raven has learned' },
   insight:     { icon: <Lightbulb size={15} />,   label: 'Raven\'s Insights', color: '#fbbf24', desc: 'Patterns and observations Raven has noticed' },
-  family:      { icon: <Users size={15} />,       label: 'People',          color: '#34d399', desc: 'Important people in your life' },
-  goal_context:{ icon: <Star size={15} />,        label: 'Goal Context',    color: '#fb923c', desc: 'Background on your goals and motivations' },
+  family:      { icon: <Users size={15} />,       label: 'People',            color: '#34d399', desc: 'Important people in your life' },
+  goal_context:{ icon: <Star size={15} />,        label: 'Goal Context',      color: '#fb923c', desc: 'Background on your goals and motivations' },
 };
 
 export default function AshProfileScreen() {
-  const [facts, setFacts] = useState<Fact[]>([]);
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const [facts, setFacts]               = useState<Fact[]>([]);
+  const [goals, setGoals]               = useState<Goal[]>([]);
   const [libraryByType, setLibraryByType] = useState<Record<string, LibraryEntry[]>>({});
-  const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ facts: true, goals: true, user_fact: true });
+  const [loading, setLoading]           = useState(true);
+  const [expanded, setExpanded]         = useState<Record<string, boolean>>({ facts: true, goals: true, user_fact: true });
 
   const fetchAll = useCallback(async () => {
     try {
@@ -34,10 +32,8 @@ export default function AshProfileScreen() {
         apiFetch(`/goals?status=active,in_progress`),
         apiFetch(`/library?types=user_fact,insight,family,goal_context&limit=50`),
       ]);
-
       if (factsRes.ok) setFacts(await factsRes.json() as Fact[]);
       if (goalsRes.ok) setGoals(await goalsRes.json() as Goal[]);
-
       if (libraryRes.ok) {
         const entries = await libraryRes.json() as LibraryEntry[];
         const byType: Record<string, LibraryEntry[]> = {};
@@ -59,7 +55,6 @@ export default function AshProfileScreen() {
   if (loading) return <div className="profile-screen"><div className="profile-empty">Loading Ash&apos;s profile...</div></div>;
 
   const hasAnything = facts.length > 0 || goals.length > 0 || Object.keys(libraryByType).length > 0;
-
   if (!hasAnything) return (
     <div className="profile-screen">
       <div className="profile-empty">
@@ -84,12 +79,7 @@ export default function AshProfileScreen() {
 
       {/* Key Facts */}
       {facts.length > 0 && (
-        <ProfileSection
-          sectionKey="facts"
-          expanded={expanded.facts}
-          onToggle={() => toggle('facts')}
-          count={facts.length}
-        >
+        <ProfileSection sectionKey="facts" expanded={expanded.facts} onToggle={() => toggle('facts')} count={facts.length}>
           <div className="profile-facts-grid">
             {facts.map(f => (
               <div key={f.key} className="profile-fact-card">
@@ -106,12 +96,7 @@ export default function AshProfileScreen() {
 
       {/* Active Goals */}
       {goals.length > 0 && (
-        <ProfileSection
-          sectionKey="goals"
-          expanded={expanded.goals}
-          onToggle={() => toggle('goals')}
-          count={goals.length}
-        >
+        <ProfileSection sectionKey="goals" expanded={expanded.goals} onToggle={() => toggle('goals')} count={goals.length}>
           <div className="profile-goals-list">
             {goals.map(g => (
               <div key={g.id} className="profile-goal">
@@ -143,28 +128,27 @@ export default function AshProfileScreen() {
             count={entries.length}
           >
             <div className="profile-entries-list">
-              <AnimatePresence>
-                {entries.map(e => (
-                  <motion.div
-                    key={e.id}
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="profile-entry"
-                  >
-                    <div className="profile-entry-title">{e.title}</div>
-                    <div className="profile-entry-content">{e.summary || e.content.slice(0, 200)}</div>
-                    {e.tags && e.tags.length > 0 && (
-                      <div className="profile-entry-tags">
-                        {e.tags.slice(0, 4).map(t => <span key={t} className="profile-entry-tag">{t}</span>)}
-                      </div>
-                    )}
-                    <div className="profile-entry-meta">
-                      Updated {new Date(e.updated_at).toLocaleDateString()}
-                      {e.confidence != null && ` · ${Math.round(e.confidence * 100)}% confidence`}
+              {entries.map((e, i) => (
+                <motion.div
+                  key={e.id}
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.03 }}
+                  className="profile-entry"
+                >
+                  <div className="profile-entry-title">{e.title}</div>
+                  <div className="profile-entry-content">{e.summary || e.content.slice(0, 200)}</div>
+                  {e.tags && e.tags.length > 0 && (
+                    <div className="profile-entry-tags">
+                      {e.tags.slice(0, 4).map(t => <span key={t} className="profile-entry-tag">{t}</span>)}
                     </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                  )}
+                  <div className="profile-entry-meta">
+                    Updated {new Date(e.updated_at).toLocaleDateString()}
+                    {e.confidence != null && ` · ${Math.round(e.confidence * 100)}% confidence`}
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </ProfileSection>
         );
@@ -192,18 +176,9 @@ function ProfileSection({ sectionKey, expanded, onToggle, count, children }: {
         <span className="profile-section-count">{count}</span>
         {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="profile-section-body"
-          >
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Collapse open={expanded} className="profile-section-body">
+        {children}
+      </Collapse>
     </div>
   );
 }
