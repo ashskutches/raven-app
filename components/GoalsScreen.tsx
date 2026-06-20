@@ -18,7 +18,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Target, CheckCircle, Circle, ChevronDown, ChevronUp,
-  GripVertical, Trash2, RotateCcw, X, CheckSquare, Sparkles, Pencil, Check, Star,
+  GripVertical, Trash2, RotateCcw, X, CheckSquare, Sparkles, Pencil, Check, Star, MessageSquare,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
@@ -34,6 +34,7 @@ interface Todo {
   recurrence: 'daily' | null;
   position: number;
   goal_id: string | null;
+  source: 'user' | 'raven' | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -117,6 +118,9 @@ export default function GoalsScreen() {
   // drag state
   const dragId   = useRef<string | null>(null);
   const dragOver = useRef<string | null>(null);
+
+  // expanded todo (click-to-show detail)
+  const [expandedTodoId, setExpandedTodoId] = useState<string | null>(null);
 
   /* ── Goal color map (stable order → stable colors) ── */
   const goalColorMap = useRef<Map<string, number>>(new Map());
@@ -443,6 +447,8 @@ export default function GoalsScreen() {
                         onDragStart={onDragStart}
                         onDragEnter={onDragEnter}
                         onDragEnd={onDragEnd}
+                        expanded={expandedTodoId === todo.id}
+                        onExpand={() => setExpandedTodoId(expandedTodoId === todo.id ? null : todo.id)}
                       />
                     ))}
                   </AnimatePresence>
@@ -471,6 +477,8 @@ export default function GoalsScreen() {
                         onDragStart={onDragStart}
                         onDragEnter={onDragEnter}
                         onDragEnd={onDragEnd}
+                        expanded={expandedTodoId === todo.id}
+                        onExpand={() => setExpandedTodoId(expandedTodoId === todo.id ? null : todo.id)}
                       />
                     ))}
                   </AnimatePresence>
@@ -497,6 +505,8 @@ export default function GoalsScreen() {
                         onStar={toggleStar}
                         onDelete={deleteTodo}
                         done
+                        expanded={expandedTodoId === todo.id}
+                        onExpand={() => setExpandedTodoId(expandedTodoId === todo.id ? null : todo.id)}
                       />
                     ))}
                   </AnimatePresence>
@@ -709,7 +719,7 @@ function QuickAdd({
 
 function TodoCard({
   todo, goals, goalColorFor, onToggle, onStar, onDelete, done = false,
-  onDragStart, onDragEnter, onDragEnd,
+  onDragStart, onDragEnter, onDragEnd, expanded = false, onExpand,
 }: {
   todo: Todo; goals: Goal[];
   goalColorFor: (id: string) => typeof GOAL_PALETTE[0];
@@ -720,6 +730,8 @@ function TodoCard({
   onDragStart?: (id: string) => void;
   onDragEnter?: (id: string) => void;
   onDragEnd?: () => void;
+  expanded?: boolean;
+  onExpand?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const linkedGoal = goals.find(g => g.id === todo.goal_id);
@@ -772,104 +784,224 @@ function TodoCard({
     <motion.div
       layout
       initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: done ? 0.5 : 1, y: 0 }}
+      animate={{ opacity: done ? 0.55 : 1, y: 0 }}
       exit={{ opacity: 0, x: 30, transition: { duration: 0.2 } }}
       transition={{ duration: 0.2 }}
-      draggable={!done}
-      onDragStart={() => onDragStart?.(todo.id)}
-      onDragEnter={() => onDragEnter?.(todo.id)}
-      onDragEnd={onDragEnd}
-      onDragOver={e => e.preventDefault()}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: `10px 10px 10px ${hasAccentBorder ? '10px' : '12px'}`,
-        marginBottom: 5, borderRadius: 10, cursor: done ? 'default' : 'grab',
-        background: cardBg,
-        border: `1px solid ${cardBorderColor}`,
-        borderLeft: hasAccentBorder ? `3px solid ${leftBorderColor}` : `1px solid ${cardBorderColor}`,
-        transition: 'background 0.15s, border-color 0.15s',
-        userSelect: 'none',
-      }}
+      style={{ marginBottom: 5 }}
     >
-      {/* Drag handle */}
-      {!done && (
-        <div style={{ opacity: hovered ? 0.4 : 0.1, transition: 'opacity 0.12s', flexShrink: 0 }}>
-          <GripVertical size={13} color="var(--color-text-subtle)" />
-        </div>
-      )}
-
-      {/* Checkbox */}
-      <button
-        id={`todo-check-${todo.id}`}
-        onClick={() => onToggle(todo)}
-        aria-label={done ? 'Mark as active' : 'Mark as done'}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}
+      {/* ── Card row ── */}
+      <div
+        draggable={!done}
+        onDragStart={() => onDragStart?.(todo.id)}
+        onDragEnter={() => onDragEnter?.(todo.id)}
+        onDragEnd={onDragEnd}
+        onDragOver={e => e.preventDefault()}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: `10px 10px 10px ${hasAccentBorder ? '10px' : '12px'}`,
+          borderRadius: expanded ? '10px 10px 0 0' : 10,
+          cursor: done ? 'pointer' : 'grab',
+          background: cardBg,
+          border: `1px solid ${cardBorderColor}`,
+          borderLeft: hasAccentBorder ? `3px solid ${leftBorderColor}` : `1px solid ${cardBorderColor}`,
+          borderBottom: expanded ? `1px solid transparent` : undefined,
+          transition: 'background 0.15s, border-color 0.15s',
+          userSelect: 'none',
+        }}
       >
-        {done
-          ? <CheckCircle size={16} color="var(--color-emerald)" />
-          : <Circle size={16} color={isDaily ? '#10b981' : goalColor ? goalColor.text : hovered ? 'var(--color-lavender)' : 'var(--color-text-subtle)'} style={{ transition: 'color 0.12s' }} />
-        }
-      </button>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{
-          fontSize: 13.5, fontWeight: (todo.starred && !done) || isDaily ? 600 : 500,
-          lineHeight: 1.4, color: done ? 'var(--color-text-subtle)' : titleColor,
-          textDecoration: done ? 'line-through' : 'none',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          display: 'flex', alignItems: 'center', gap: 5,
-        }}>
-          {isDaily && !done && <span style={{ fontSize: 11, color: '#34d399', flexShrink: 0 }}>↺</span>}
-          {todo.title}
-        </p>
-        {todo.notes && !done && (
-          <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 2, lineHeight: 1.4 }}>{todo.notes}</p>
-        )}
-        {/* Goal badge */}
-        {linkedGoal && goalColor && !done && (
-          <div style={{ marginTop: 4 }}>
-            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 4, background: goalColor.bg, color: goalColor.text, border: `1px solid ${goalColor.border.replace('0.5', '0.2')}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: goalColor.dot, flexShrink: 0 }} />
-              {linkedGoal.title}
-            </span>
+        {/* Drag handle */}
+        {!done && (
+          <div style={{ opacity: hovered ? 0.4 : 0.1, transition: 'opacity 0.12s', flexShrink: 0 }}>
+            <GripVertical size={13} color="var(--color-text-subtle)" />
           </div>
         )}
-      </div>
 
-      {/* Star button — always visible if starred, hover-reveal if not */}
-      {!done && (
+        {/* Checkbox */}
         <button
-          id={`todo-star-${todo.id}`}
-          onClick={e => { e.stopPropagation(); onStar(todo); }}
-          aria-label={todo.starred ? 'Unstar todo' : 'Star todo'}
-          title={todo.starred ? 'Unstar' : 'Star — mark as important today'}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: 3, flexShrink: 0,
-            opacity: todo.starred ? 1 : hovered ? 0.5 : 0,
-            transition: 'opacity 0.12s, color 0.12s',
-            color: todo.starred ? '#f59e0b' : 'var(--color-text-subtle)',
-          }}
+          id={`todo-check-${todo.id}`}
+          onClick={() => onToggle(todo)}
+          aria-label={done ? 'Mark as active' : 'Mark as done'}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}
         >
-          <Star size={14} fill={todo.starred ? '#f59e0b' : 'none'} stroke={todo.starred ? '#f59e0b' : 'currentColor'} />
+          {done
+            ? <CheckCircle size={16} color="var(--color-emerald)" />
+            : <Circle size={16} color={isDaily ? '#10b981' : goalColor ? goalColor.text : hovered ? 'var(--color-lavender)' : 'var(--color-text-subtle)'} style={{ transition: 'color 0.12s' }} />
+          }
         </button>
-      )}
 
-      {/* Delete + restore actions */}
-      <div style={{ display: 'flex', gap: 2, opacity: hovered ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
-        {done && (
-          <button id={`todo-restore-${todo.id}`} onClick={() => onToggle(todo)} aria-label="Restore"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, borderRadius: 4, color: 'var(--color-text-subtle)' }}>
-            <RotateCcw size={12} />
+        {/* Content — click to expand */}
+        <div
+          onClick={onExpand}
+          style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+        >
+          <p style={{
+            fontSize: 13.5, fontWeight: (todo.starred && !done) || isDaily ? 600 : 500,
+            lineHeight: 1.4, color: done ? 'var(--color-text-subtle)' : titleColor,
+            textDecoration: done ? 'line-through' : 'none',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            display: 'flex', alignItems: 'center', gap: 5,
+          }}>
+            {isDaily && !done && <span style={{ fontSize: 11, color: '#34d399', flexShrink: 0 }}>↺</span>}
+            {/* Raven-created badge */}
+            {todo.source === 'raven' && !done && (
+              <span
+                title="Created by Raven"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
+                  background: isDaily
+                    ? 'rgba(16,185,129,0.2)'
+                    : goalColor
+                      ? `${goalColor.bg}`
+                      : 'rgba(167,139,250,0.18)',
+                  fontSize: 8,
+                  lineHeight: 1,
+                }}
+              >
+                ✦
+              </span>
+            )}
+            {todo.title}
+            {/* Notes indicator dot */}
+            {todo.notes && (
+              <span
+                title="Has notes — click to expand"
+                style={{
+                  width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+                  background: isDaily ? '#34d399' : goalColor ? goalColor.dot : 'var(--color-lavender)',
+                  opacity: 0.7, marginLeft: 2,
+                }}
+              />
+            )}
+          </p>
+          {/* Goal badge */}
+          {linkedGoal && goalColor && !done && (
+            <div style={{ marginTop: 3 }}>
+              <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 4, background: goalColor.bg, color: goalColor.text, border: `1px solid ${goalColor.border.replace('0.5', '0.2')}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: goalColor.dot, flexShrink: 0 }} />
+                {linkedGoal.title}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Notes/expand icon — visible when notes exist */}
+        {todo.notes && onExpand && (
+          <button
+            id={`todo-expand-${todo.id}`}
+            onClick={onExpand}
+            aria-label={expanded ? 'Collapse details' : 'View Raven\'s notes'}
+            title={expanded ? 'Hide notes' : 'View notes'}
+            style={{
+              background: expanded ? 'rgba(167,139,250,0.15)' : 'none',
+              border: `1px solid ${expanded ? 'rgba(167,139,250,0.35)' : 'transparent'}`,
+              borderRadius: 6, cursor: 'pointer', padding: '3px 5px', flexShrink: 0,
+              color: expanded ? 'var(--color-lavender)' : hovered ? 'var(--color-text-subtle)' : 'transparent',
+              transition: 'all 0.15s',
+            }}
+          >
+            <MessageSquare size={12} />
           </button>
         )}
-        <button id={`todo-delete-${todo.id}`} onClick={() => onDelete(todo.id)} aria-label="Delete todo"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, borderRadius: 4, color: 'var(--color-text-subtle)' }}>
-          <X size={12} />
-        </button>
+
+        {/* Star button */}
+        {!done && (
+          <button
+            id={`todo-star-${todo.id}`}
+            onClick={e => { e.stopPropagation(); onStar(todo); }}
+            aria-label={todo.starred ? 'Unstar todo' : 'Star todo'}
+            title={todo.starred ? 'Unstar' : 'Star — mark as important today'}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: 3, flexShrink: 0,
+              opacity: todo.starred ? 1 : hovered ? 0.5 : 0,
+              transition: 'opacity 0.12s, color 0.12s',
+              color: todo.starred ? '#f59e0b' : 'var(--color-text-subtle)',
+            }}
+          >
+            <Star size={14} fill={todo.starred ? '#f59e0b' : 'none'} stroke={todo.starred ? '#f59e0b' : 'currentColor'} />
+          </button>
+        )}
+
+        {/* Delete + restore */}
+        <div style={{ display: 'flex', gap: 2, opacity: hovered ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
+          {done && (
+            <button id={`todo-restore-${todo.id}`} onClick={() => onToggle(todo)} aria-label="Restore"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, borderRadius: 4, color: 'var(--color-text-subtle)' }}>
+              <RotateCcw size={12} />
+            </button>
+          )}
+          <button id={`todo-delete-${todo.id}`} onClick={() => onDelete(todo.id)} aria-label="Delete todo"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, borderRadius: 4, color: 'var(--color-text-subtle)' }}>
+            <X size={12} />
+          </button>
+        </div>
       </div>
+
+      {/* ── Expandable detail panel ── */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            key="detail"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{
+              background: cardBg,
+              border: `1px solid ${cardBorderColor}`,
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              borderLeft: hasAccentBorder ? `3px solid ${leftBorderColor}` : `1px solid ${cardBorderColor}`,
+              borderRadius: '0 0 10px 10px',
+              padding: '10px 14px 12px',
+            }}>
+              {todo.notes ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <Sparkles
+                    size={13}
+                    color={isDaily ? '#34d399' : goalColor ? goalColor.text : 'var(--color-lavender)'}
+                    style={{ flexShrink: 0, marginTop: 2 }}
+                  />
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: isDaily ? '#34d399' : goalColor ? goalColor.text : 'var(--color-lavender)', marginBottom: 4, letterSpacing: '0.3px' }}>
+                      Raven&apos;s note
+                    </p>
+                    <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      {todo.notes}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ fontSize: 12, color: 'var(--color-text-subtle)', fontStyle: 'italic' }}>No notes on this todo.</p>
+              )}
+              <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 8 }}>
+                {/* Source badge */}
+                {todo.source === 'raven' ? (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: isDaily ? '#34d399' : goalColor ? goalColor.text : 'var(--color-lavender)', background: isDaily ? 'rgba(16,185,129,0.1)' : goalColor ? goalColor.bg : 'rgba(167,139,250,0.12)', padding: '1px 8px', borderRadius: 100, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    ✦ Raven
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.06)', padding: '1px 8px', borderRadius: 100 }}>
+                    You
+                  </span>
+                )}
+                <span style={{ fontSize: 10.5, color: 'var(--color-text-subtle)' }}>
+                  {new Date(todo.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+                {todo.recurrence === 'daily' && (
+                  <span style={{ fontSize: 10, fontWeight: 600, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 7px', borderRadius: 100 }}>↺ daily</span>
+                )}
+                {todo.starred && !done && (
+                  <span style={{ fontSize: 10, fontWeight: 600, color: '#f59e0b', background: 'rgba(251,191,36,0.1)', padding: '1px 7px', borderRadius: 100 }}>⭐ priority</span>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
