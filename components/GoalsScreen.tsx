@@ -18,7 +18,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Target, CheckCircle, Circle, ChevronDown, ChevronUp,
-  GripVertical, Trash2, RotateCcw, X, CheckSquare, Sparkles, Pencil, Check,
+  GripVertical, Trash2, RotateCcw, X, CheckSquare, Sparkles, Pencil, Check, Star,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
@@ -30,6 +30,8 @@ interface Todo {
   notes: string | null;
   status: 'active' | 'done' | 'archived';
   priority: number;
+  starred: boolean;
+  recurrence: 'daily' | null;
   position: number;
   goal_id: string | null;
   created_at: string;
@@ -94,10 +96,10 @@ export default function GoalsScreen() {
   const [loading, setLoading]           = useState(true);
 
   // Todo quick-add state
-  const [newTitle, setNewTitle]         = useState('');
-  const [newPriority, setNewPriority]   = useState(3);
-  const [newGoalId, setNewGoalId]       = useState<string>('');
-  const [addingTodo, setAddingTodo]     = useState(false);
+  const [newTitle, setNewTitle]           = useState('');
+  const [newGoalId, setNewGoalId]         = useState<string>('');
+  const [newIsDaily, setNewIsDaily]       = useState(false);
+  const [addingTodo, setAddingTodo]       = useState(false);
 
   // Goal panel state
   const [expandedGoal, setExpandedGoal] = useState<string | null>(null);
@@ -235,8 +237,8 @@ export default function GoalsScreen() {
         method: 'POST',
         body: JSON.stringify({
           title,
-          priority: newPriority,
           goal_id: newGoalId || null,
+          recurrence: newIsDaily ? 'daily' : null,
         }),
       });
       if (res.ok) {
@@ -244,14 +246,20 @@ export default function GoalsScreen() {
         setTodos(prev => [...prev, created]);
       }
       setNewTitle('');
-      setNewPriority(3);
-      // Don't clear goal selection — user probably wants to add more to same goal
+      if (!newIsDaily) setNewGoalId(''); // daily todos don't belong to goals
     } finally { setAddingTodo(false); }
   };
 
   const handleInputKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addTodo(); }
     if (e.key === 'Escape') { setNewTitle(''); }
+  };
+
+  /* ── Toggle starred ── */
+  const toggleStar = async (todo: Todo) => {
+    const newStarred = !todo.starred;
+    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, starred: newStarred } : t));
+    await apiFetch(`/todos/${todo.id}`, { method: 'PATCH', body: JSON.stringify({ starred: newStarred }) }).catch(() => {});
   };
 
   /* ── Toggle done ── */
@@ -300,9 +308,21 @@ export default function GoalsScreen() {
   };
 
   /* ── Derived ── */
-  const activeTodos = todos
-    .filter(t => t.status === 'active')
-    .sort((a, b) => a.position - b.position || new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  // Three visually distinct categories:
+  //   1. Daily (green) — recurrence='daily', active ones only
+  //   2. Starred — one-off, starred
+  //   3. Regular — everything else active
+  const activeTodos   = todos.filter(t => t.status === 'active');
+  const dailyTodos    = activeTodos
+    .filter(t => t.recurrence === 'daily')
+    .sort((a, b) => a.position - b.position);
+  const starredTodos  = activeTodos
+    .filter(t => t.recurrence !== 'daily' && t.starred)
+    .sort((a, b) => a.position - b.position);
+  const regularTodos  = activeTodos
+    .filter(t => t.recurrence !== 'daily' && !t.starred)
+    .sort((a, b) => a.position - b.position);
+  const allActive     = [...dailyTodos, ...starredTodos, ...regularTodos];
 
   const doneTodos = todos
     .filter(t => t.status === 'done')
@@ -332,15 +352,20 @@ export default function GoalsScreen() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <CheckSquare size={18} color="var(--color-lavender)" />
             <h2 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.3px' }}>Todos</h2>
-            {activeTodos.length > 0 && (
+            {allActive.length > 0 && (
               <span style={{ background: 'rgba(167,139,250,0.18)', color: 'var(--color-lavender)', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 100, marginLeft: 4 }}>
-                {activeTodos.length}
+                {allActive.length}
+              </span>
+            )}
+            {dailyTodos.length > 0 && (
+              <span style={{ background: 'rgba(16,185,129,0.18)', color: '#10b981', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 100 }}>
+                ↺ {dailyTodos.length} daily
               </span>
             )}
           </div>
 
-          {/* Goal legend — colored dots */}
-          {activeGoals.length > 0 && (
+          {/* Goal legend — only show when not in daily mode */}
+          {activeGoals.length > 0 && !newIsDaily && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               {activeGoals.map(g => {
                 const c = getGoalColorFor(g.id);
@@ -382,9 +407,9 @@ export default function GoalsScreen() {
             onChange={setNewTitle}
             onSubmit={addTodo}
             onKeyDown={handleInputKey}
-            priority={newPriority}
-            onPriorityChange={setNewPriority}
             loading={addingTodo}
+            isDaily={newIsDaily}
+            onDailyToggle={() => setNewIsDaily(d => !d)}
             selectedGoalId={newGoalId}
             goals={activeGoals}
             goalColorFor={getGoalColorFor}
@@ -393,25 +418,64 @@ export default function GoalsScreen() {
 
         {/* Todo list */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 24px 24px' }}>
-          {activeTodos.length === 0 && doneTodos.length === 0 ? (
+          {allActive.length === 0 && doneTodos.length === 0 ? (
             <EmptyTodos />
           ) : (
             <>
-              <AnimatePresence>
-                {activeTodos.map(todo => (
-                  <TodoCard
-                    key={todo.id}
-                    todo={todo}
-                    goals={goals}
-                    goalColorFor={getGoalColorFor}
-                    onToggle={toggleTodo}
-                    onDelete={deleteTodo}
-                    onDragStart={onDragStart}
-                    onDragEnter={onDragEnter}
-                    onDragEnd={onDragEnd}
-                  />
-                ))}
-              </AnimatePresence>
+              {/* ─── Daily section (green) ─── */}
+              {dailyTodos.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.8px' }}>↺ Daily</span>
+                    <div style={{ flex: 1, height: 1, background: 'rgba(16,185,129,0.2)' }} />
+                    <span style={{ fontSize: 10, color: 'rgba(16,185,129,0.5)' }}>resets 9am</span>
+                  </div>
+                  <AnimatePresence>
+                    {dailyTodos.map(todo => (
+                      <TodoCard
+                        key={todo.id}
+                        todo={todo}
+                        goals={goals}
+                        goalColorFor={getGoalColorFor}
+                        onToggle={toggleTodo}
+                        onStar={toggleStar}
+                        onDelete={deleteTodo}
+                        onDragStart={onDragStart}
+                        onDragEnter={onDragEnter}
+                        onDragEnd={onDragEnd}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+
+              {/* ─── Starred + Regular ─── */}
+              {(starredTodos.length > 0 || regularTodos.length > 0) && (
+                <div>
+                  {dailyTodos.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Todos</span>
+                      <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                    </div>
+                  )}
+                  <AnimatePresence>
+                    {[...starredTodos, ...regularTodos].map(todo => (
+                      <TodoCard
+                        key={todo.id}
+                        todo={todo}
+                        goals={goals}
+                        goalColorFor={getGoalColorFor}
+                        onToggle={toggleTodo}
+                        onStar={toggleStar}
+                        onDelete={deleteTodo}
+                        onDragStart={onDragStart}
+                        onDragEnter={onDragEnter}
+                        onDragEnd={onDragEnd}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
 
               {doneTodos.length > 0 && (
                 <div style={{ marginTop: 24 }}>
@@ -430,6 +494,7 @@ export default function GoalsScreen() {
                         goals={goals}
                         goalColorFor={getGoalColorFor}
                         onToggle={toggleTodo}
+                        onStar={toggleStar}
                         onDelete={deleteTodo}
                         done
                       />
@@ -557,36 +622,43 @@ export default function GoalsScreen() {
 /* ── Quick-add input ────────────────────────────────────────── */
 
 function QuickAdd({
-  value, onChange, onSubmit, onKeyDown, priority, onPriorityChange, loading,
+  value, onChange, onSubmit, onKeyDown, loading,
+  isDaily, onDailyToggle,
   selectedGoalId, goals, goalColorFor,
 }: {
   value: string; onChange: (v: string) => void;
   onSubmit: () => void; onKeyDown: (e: React.KeyboardEvent) => void;
-  priority: number; onPriorityChange: (p: number) => void; loading: boolean;
+  loading: boolean;
+  isDaily: boolean; onDailyToggle: () => void;
   selectedGoalId: string;
   goals: Goal[];
   goalColorFor: (id: string) => typeof GOAL_PALETTE[0];
 }) {
-  const pColor = PRIORITY_COLORS[priority];
-  const selGoal = goals.find(g => g.id === selectedGoalId);
+  const selGoal   = !isDaily ? goals.find(g => g.id === selectedGoalId) : undefined;
   const goalColor = selGoal ? goalColorFor(selGoal.id) : null;
+
+  const bg     = isDaily ? 'rgba(16,185,129,0.08)' : goalColor ? goalColor.bg : 'rgba(255,255,255,0.05)';
+  const border = isDaily ? 'rgba(16,185,129,0.3)'  : goalColor ? goalColor.border : 'var(--color-border)';
 
   return (
     <div style={{
-      background: goalColor ? goalColor.bg : 'rgba(255,255,255,0.05)',
-      border: `1px solid ${goalColor ? goalColor.border : 'var(--color-border)'}`,
-      borderRadius: 12, padding: '10px 12px', marginBottom: 4,
-      display: 'flex', alignItems: 'center', gap: 8,
+      background: bg,
+      border: `1px solid ${border}`,
+      borderLeft: isDaily ? '3px solid #10b981' : undefined,
+      borderRadius: 12, padding: '10px 14px', marginBottom: 4,
+      display: 'flex', alignItems: 'center', gap: 10,
       transition: 'all 0.2s',
     }}>
-      {goalColor && selGoal ? (
+      {isDaily ? (
+        <span style={{ fontSize: 13, color: '#10b981', flexShrink: 0 }}>↺</span>
+      ) : goalColor && selGoal ? (
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: goalColor.dot, flexShrink: 0 }} />
       ) : (
         <Plus size={15} color="var(--color-text-subtle)" />
       )}
       <input
         id="todo-quick-add"
-        placeholder={selGoal ? `Add todo for "${selGoal.title}"...` : 'Add a todo... (Enter to save)'}
+        placeholder={isDaily ? 'Add a daily habit...' : selGoal ? `Add todo for "${selGoal.title}"...` : 'Add a todo... (Enter to save)'}
         value={value}
         onChange={e => onChange(e.target.value)}
         onKeyDown={onKeyDown}
@@ -594,35 +666,41 @@ function QuickAdd({
         aria-label="New todo title"
       />
 
-      {/* Priority selector */}
-      <div style={{ display: 'flex', gap: 3 }}>
-        {[1, 2, 3, 4, 5].map(p => (
-          <button
-            key={p}
-            id={`priority-${p}`}
-            onClick={() => onPriorityChange(p)}
-            aria-label={`Priority ${p}`}
-            style={{ width: 20, height: 20, borderRadius: 4, border: 'none', cursor: 'pointer', background: priority === p ? PRIORITY_COLORS[p].bg : 'rgba(255,255,255,0.05)', transition: 'all 0.12s', fontSize: 10, fontWeight: 700, color: priority === p ? PRIORITY_COLORS[p].text : 'var(--color-text-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            {p}
-          </button>
-        ))}
-      </div>
+      {/* Daily toggle */}
+      <button
+        id="todo-daily-toggle"
+        onClick={onDailyToggle}
+        aria-label={isDaily ? 'Switch to regular todo' : 'Make this a daily todo'}
+        title={isDaily ? 'Daily — click to switch to regular' : 'Make this repeat daily'}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '3px 9px', borderRadius: 100, fontSize: 11, fontWeight: 700,
+          border: `1px solid ${isDaily ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.1)'}`,
+          background: isDaily ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.04)',
+          color: isDaily ? '#10b981' : 'var(--color-text-subtle)',
+          cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
+        }}
+      >
+        ↺ Daily
+      </button>
 
       {value.trim() && (
         <button
           id="todo-add-btn"
           onClick={onSubmit}
           disabled={loading}
-          style={{ background: goalColor ? `linear-gradient(135deg, ${goalColor.dot}, ${goalColor.dot}cc)` : 'linear-gradient(135deg, #6366f1, #7c3aed)', border: 'none', borderRadius: 6, padding: '4px 10px', color: 'white', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: loading ? 0.5 : 1 }}
+          style={{
+            background: isDaily
+              ? 'linear-gradient(135deg, #10b981, #059669)'
+              : goalColor ? `linear-gradient(135deg, ${goalColor.dot}, ${goalColor.dot}cc)` : 'linear-gradient(135deg, #6366f1, #7c3aed)',
+            border: 'none', borderRadius: 6, padding: '4px 10px', color: 'white',
+            fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600,
+            cursor: 'pointer', opacity: loading ? 0.5 : 1,
+          }}
         >
           {loading ? '...' : 'Add'}
         </button>
       )}
-
-      <span style={{ fontSize: 10, color: goalColor ? goalColor.text : pColor.text, minWidth: 42, textAlign: 'right', fontWeight: 600 }}>
-        {goalColor ? selGoal?.title.split(' ')[0] : pColor.label}
-      </span>
     </div>
   );
 }
@@ -630,12 +708,13 @@ function QuickAdd({
 /* ── Individual Todo Card ───────────────────────────────────── */
 
 function TodoCard({
-  todo, goals, goalColorFor, onToggle, onDelete, done = false,
+  todo, goals, goalColorFor, onToggle, onStar, onDelete, done = false,
   onDragStart, onDragEnter, onDragEnd,
 }: {
   todo: Todo; goals: Goal[];
   goalColorFor: (id: string) => typeof GOAL_PALETTE[0];
   onToggle: (t: Todo) => void;
+  onStar: (t: Todo) => void;
   onDelete: (id: string) => void;
   done?: boolean;
   onDragStart?: (id: string) => void;
@@ -643,22 +722,51 @@ function TodoCard({
   onDragEnd?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const pColor = PRIORITY_COLORS[todo.priority] ?? PRIORITY_COLORS[3];
   const linkedGoal = goals.find(g => g.id === todo.goal_id);
-  const goalColor = linkedGoal ? goalColorFor(linkedGoal.id) : null;
+  const goalColor  = linkedGoal ? goalColorFor(linkedGoal.id) : null;
 
-  // Goal-tinted card: colored left border + subtle tinted background
+  // ── Colour priority: daily > starred > goal > plain ──
+  const isDaily   = todo.recurrence === 'daily' && !done;
+  const isStarred = todo.starred && !done && !isDaily;
+
   const cardBg = done
     ? 'rgba(255,255,255,0.02)'
-    : goalColor
-      ? goalColor.bg
-      : hovered ? 'rgba(255,255,255,0.065)' : 'rgba(255,255,255,0.04)';
+    : isDaily
+      ? 'rgba(16,185,129,0.07)'
+      : isStarred
+        ? 'rgba(251,191,36,0.07)'
+        : goalColor
+          ? goalColor.bg
+          : hovered ? 'rgba(255,255,255,0.065)' : 'rgba(255,255,255,0.04)';
 
-  const cardBorder = done
+  const leftBorderColor = done
+    ? 'transparent'
+    : isDaily
+      ? '#10b981'
+      : isStarred
+        ? '#f59e0b'
+        : goalColor
+          ? goalColor.dot
+          : 'transparent';
+
+  const cardBorderColor = done
     ? 'var(--color-border)'
-    : goalColor
-      ? (hovered ? goalColor.border : `${goalColor.border.replace('0.5', '0.25')}`)
-      : hovered ? 'rgba(255,255,255,0.14)' : 'var(--color-border)';
+    : isDaily
+      ? 'rgba(16,185,129,0.3)'
+      : isStarred
+        ? 'rgba(251,191,36,0.35)'
+        : goalColor
+          ? (hovered ? goalColor.border : goalColor.border.replace('0.5', '0.2'))
+          : hovered ? 'rgba(255,255,255,0.14)' : 'var(--color-border)';
+
+  const hasAccentBorder = isDaily || isStarred || (!!goalColor && !done);
+
+  // Title colour: green for daily
+  const titleColor = done
+    ? 'var(--color-text-subtle)'
+    : isDaily
+      ? '#a7f3d0'
+      : 'var(--color-text)';
 
   return (
     <motion.div
@@ -675,24 +783,20 @@ function TodoCard({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: 'flex', alignItems: 'flex-start', gap: 10,
-        padding: '10px 12px 10px 0',
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: `10px 10px 10px ${hasAccentBorder ? '10px' : '12px'}`,
         marginBottom: 5, borderRadius: 10, cursor: done ? 'default' : 'grab',
         background: cardBg,
-        border: `1px solid ${cardBorder}`,
-        // Goal color left accent bar
-        borderLeft: goalColor && !done
-          ? `3px solid ${goalColor.dot}`
-          : done ? '3px solid transparent' : `1px solid ${cardBorder}`,
-        paddingLeft: goalColor && !done ? 10 : 12,
+        border: `1px solid ${cardBorderColor}`,
+        borderLeft: hasAccentBorder ? `3px solid ${leftBorderColor}` : `1px solid ${cardBorderColor}`,
         transition: 'background 0.15s, border-color 0.15s',
         userSelect: 'none',
       }}
     >
       {/* Drag handle */}
       {!done && (
-        <div style={{ paddingTop: 2, opacity: hovered ? 0.4 : 0.12, transition: 'opacity 0.12s', flexShrink: 0 }}>
-          <GripVertical size={14} color="var(--color-text-subtle)" />
+        <div style={{ opacity: hovered ? 0.4 : 0.1, transition: 'opacity 0.12s', flexShrink: 0 }}>
+          <GripVertical size={13} color="var(--color-text-subtle)" />
         </div>
       )}
 
@@ -701,50 +805,69 @@ function TodoCard({
         id={`todo-check-${todo.id}`}
         onClick={() => onToggle(todo)}
         aria-label={done ? 'Mark as active' : 'Mark as done'}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0, paddingTop: 1 }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}
       >
         {done
-          ? <CheckCircle size={17} color="var(--color-emerald)" />
-          : <Circle size={17} color={goalColor ? goalColor.text : hovered ? 'var(--color-lavender)' : 'var(--color-text-subtle)'} style={{ transition: 'color 0.12s' }} />
+          ? <CheckCircle size={16} color="var(--color-emerald)" />
+          : <Circle size={16} color={isDaily ? '#10b981' : goalColor ? goalColor.text : hovered ? 'var(--color-lavender)' : 'var(--color-text-subtle)'} style={{ transition: 'color 0.12s' }} />
         }
       </button>
 
       {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13.5, fontWeight: 500, lineHeight: 1.4, color: done ? 'var(--color-text-subtle)' : 'var(--color-text)', textDecoration: done ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <p style={{
+          fontSize: 13.5, fontWeight: (todo.starred && !done) || isDaily ? 600 : 500,
+          lineHeight: 1.4, color: done ? 'var(--color-text-subtle)' : titleColor,
+          textDecoration: done ? 'line-through' : 'none',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          display: 'flex', alignItems: 'center', gap: 5,
+        }}>
+          {isDaily && !done && <span style={{ fontSize: 11, color: '#34d399', flexShrink: 0 }}>↺</span>}
           {todo.title}
         </p>
         {todo.notes && !done && (
-          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2, lineHeight: 1.4 }}>{todo.notes}</p>
+          <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 2, lineHeight: 1.4 }}>{todo.notes}</p>
         )}
-        <div style={{ display: 'flex', gap: 5, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Priority badge — skip if linked to goal (goal color tells the story) */}
-          {todo.priority !== 3 && !linkedGoal && (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: pColor.bg, color: pColor.text }}>
-              {pColor.label}
-            </span>
-          )}
-          {/* Goal badge */}
-          {linkedGoal && goalColor && (
-            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 4, background: goalColor.bg, color: goalColor.text, border: `1px solid ${goalColor.border.replace('0.5', '0.2')}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130, display: 'flex', alignItems: 'center', gap: 4 }}>
+        {/* Goal badge */}
+        {linkedGoal && goalColor && !done && (
+          <div style={{ marginTop: 4 }}>
+            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 4, background: goalColor.bg, color: goalColor.text, border: `1px solid ${goalColor.border.replace('0.5', '0.2')}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: goalColor.dot, flexShrink: 0 }} />
               {linkedGoal.title}
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Actions */}
-      <div style={{ display: 'flex', gap: 4, opacity: hovered ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0, paddingRight: 8 }}>
+      {/* Star button — always visible if starred, hover-reveal if not */}
+      {!done && (
+        <button
+          id={`todo-star-${todo.id}`}
+          onClick={e => { e.stopPropagation(); onStar(todo); }}
+          aria-label={todo.starred ? 'Unstar todo' : 'Star todo'}
+          title={todo.starred ? 'Unstar' : 'Star — mark as important today'}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 3, flexShrink: 0,
+            opacity: todo.starred ? 1 : hovered ? 0.5 : 0,
+            transition: 'opacity 0.12s, color 0.12s',
+            color: todo.starred ? '#f59e0b' : 'var(--color-text-subtle)',
+          }}
+        >
+          <Star size={14} fill={todo.starred ? '#f59e0b' : 'none'} stroke={todo.starred ? '#f59e0b' : 'currentColor'} />
+        </button>
+      )}
+
+      {/* Delete + restore actions */}
+      <div style={{ display: 'flex', gap: 2, opacity: hovered ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
         {done && (
           <button id={`todo-restore-${todo.id}`} onClick={() => onToggle(todo)} aria-label="Restore"
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, borderRadius: 4, color: 'var(--color-text-subtle)' }}>
-            <RotateCcw size={13} />
+            <RotateCcw size={12} />
           </button>
         )}
         <button id={`todo-delete-${todo.id}`} onClick={() => onDelete(todo.id)} aria-label="Delete todo"
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, borderRadius: 4, color: 'var(--color-text-subtle)' }}>
-          <X size={13} />
+          <X size={12} />
         </button>
       </div>
     </motion.div>

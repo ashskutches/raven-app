@@ -20,12 +20,13 @@ import EvolutionScreen       from '@/components/EvolutionScreen';
 import CostScreen            from '@/components/CostScreen';
 import ContactsScreen        from '@/components/ContactsScreen';
 import PeopleScreen          from '@/components/PeopleScreen';
+import ShoppingScreen        from '@/components/ShoppingScreen';
 import AuthGate              from '@/components/AuthGate';
 
-type Screen = 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'mind' | 'activity' | 'evolution' | 'cost' | 'contacts' | 'people';
+type Screen = 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'mind' | 'activity' | 'evolution' | 'cost' | 'contacts' | 'people' | 'shopping';
 
 const VALID_SCREENS = new Set<Screen>([
-  'dashboard', 'chat', 'profile', 'goals', 'library', 'mind', 'activity', 'evolution', 'cost', 'contacts', 'people',
+  'dashboard', 'chat', 'profile', 'goals', 'library', 'mind', 'activity', 'evolution', 'cost', 'contacts', 'people', 'shopping',
 ]);
 
 const SCREEN_TITLES: Record<Screen, string> = {
@@ -40,6 +41,7 @@ const SCREEN_TITLES: Record<Screen, string> = {
   cost:      'Cost',
   contacts:  'Trusted Contacts',
   people:    'People',
+  shopping:  'Budget & Shopping',
 };
 
 const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof LayoutDashboard }> = [
@@ -52,6 +54,7 @@ const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof LayoutDashboard
   { id: 'activity',  label: 'Activity',  icon: Radio           },
   { id: 'contacts',  label: 'Contacts',  icon: Users           },
   { id: 'people',    label: 'People',    icon: Heart           },
+  { id: 'shopping',  label: 'Shopping',  icon: DollarSign      },
   { id: 'evolution', label: 'Evolve',    icon: Zap             },
   { id: 'cost',      label: 'Cost',      icon: DollarSign      },
 ];
@@ -157,6 +160,7 @@ export default function ScreenPage() {
               {screen === 'cost'      && <CostScreen />}
               {screen === 'contacts'  && <ContactsScreen />}
               {screen === 'people'    && <PeopleScreen />}
+              {screen === 'shopping'  && <ShoppingScreen />}
             </motion.div>
           </AnimatePresence>
         </main>
