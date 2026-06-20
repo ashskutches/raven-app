@@ -32,7 +32,7 @@ const SUGGESTIONS = [
 
 const CONV_KEY    = 'raven_conversation_id';
 const CONV_TS_KEY = 'raven_conversation_ts';
-const CONV_TTL_MS = 24 * 60 * 60 * 1000;
+const CONV_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — persist across sessions
 
 /* ─── Tool metadata ──────────────────────────────────────────────── */
 const TOOL_META: Record<string, { label: (args?: Record<string, unknown>) => string; icon: typeof Globe; color: string }> = {
@@ -304,6 +304,30 @@ export default function ChatScreen() {
   const messagesEndRef  = useRef<HTMLDivElement>(null);
   const inputRef        = useRef<HTMLTextAreaElement>(null);
   const abortRef        = useRef<AbortController | null>(null);
+
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // Load conversation history from DB on mount so page refresh doesn't wipe context
+  useEffect(() => {
+    if (!conversationId || historyLoaded) return;
+    setHistoryLoaded(true);
+
+    apiFetch(`/chat/history/${conversationId}?limit=40`)
+      .then(async r => {
+        if (!r.ok) return;
+        const history: Array<{ role: 'user' | 'assistant'; content: string }> = await r.json();
+        if (history.length === 0) return;
+        // Convert DB messages into local Message format
+        const restored: Message[] = history.map(m => ({
+          id: crypto.randomUUID(),
+          role: m.role,
+          content: m.content,
+        }));
+        setMessages(restored);
+      })
+      .catch(() => { /* silent — fallback to empty state */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
 
   // Pick up prefill from Research Now → Discuss with Raven handoff
   useEffect(() => {
