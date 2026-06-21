@@ -47,16 +47,22 @@ function ReflectPanel({ entry }: { entry: LibraryEntry }) {
   const [streamText, setStreamText]   = useState('');
   const [input, setInput]             = useState('');
   const [showContent, setShowContent] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const abortRef  = useRef<AbortController | null>(null);
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const abortRef   = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+
+  // Track mount state for safe setState after async operations
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const streamReflection = useCallback(async (msgs: ChatMessage[]) => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
-    setStreaming(true);
-    setStreamText('');
+    if (mountedRef.current) { setStreaming(true); setStreamText(''); }
 
     try {
       const res = await apiFetch(`/library/${entry.id}/reflect`, {
@@ -73,6 +79,7 @@ function ReflectPanel({ entry }: { entry: LibraryEntry }) {
       let full = '';
 
       while (true) {
+        if (!mountedRef.current) { reader.cancel(); break; }
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -83,11 +90,11 @@ function ReflectPanel({ entry }: { entry: LibraryEntry }) {
           if (!line.startsWith('data: ')) continue;
           try {
             const parsed = JSON.parse(line.slice(6));
-            if (parsed.text) {
+            if (parsed.text && mountedRef.current) {
               full += parsed.text;
               setStreamText(full);
             }
-            if (parsed.done) {
+            if (parsed.done && mountedRef.current) {
               setMessages(prev => [...prev, { role: 'assistant', content: full }]);
               setStreamText('');
               setStreaming(false);
@@ -96,17 +103,17 @@ function ReflectPanel({ entry }: { entry: LibraryEntry }) {
         }
       }
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
+      if ((err as Error).name !== 'AbortError' && mountedRef.current) {
         setStreamText('');
         setStreaming(false);
       }
     }
   }, [entry.id]);
 
-  // Auto-trigger reflection when panel mounts
+  // Auto-trigger reflection when panel mounts; abort on entry change or unmount
   useEffect(() => {
     streamReflection([]);
-    return () => abortRef.current?.abort();
+    return () => { abortRef.current?.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry.id]);
 
