@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * PeopleScreen — Personal CRM with Discord Sync
+ * PeopleScreen — Personal CRM (merged with Trusted Contacts)
  *
  * Raven knows the important people in your life:
  *  - Syncs automatically from Discord guilds
  *  - Tracks relationship type, birthday, contact info
  *  - Logs Raven's intel notes on each person
  *  - Can message authorized people directly via Discord
+ *  - Trust access: mark who can message Raven, with permission levels
  *  - Privacy-first: Raven never shares your data without authorization
  */
 
@@ -17,11 +18,14 @@ import {
   Users, Plus, Trash2, Edit3, Check, X, Cake,
   Phone, Mail, RefreshCw, MessageSquare, Shield,
   ShieldOff, ChevronDown, ChevronUp, Send, StickyNote,
-  Search, Wifi,
+  Search, Wifi, Lock, Unlock, Star, Server, Hand,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
 /* ── Types ─────────────────────────────────────────────────── */
+
+type Permission  = 'chat_only' | 'updates' | 'full';
+type AccessRole  = 'contact' | 'family' | 'team';
 
 interface Person {
   id: string;
@@ -35,7 +39,13 @@ interface Person {
   discord_user_id: string | null;
   discord_username: string | null;
   discord_avatar_url: string | null;
+  telegram_user_id: string | null;
   can_raven_contact: boolean;
+  trusted_contact: boolean;
+  permission: Permission;
+  access_role: AccessRole;
+  active: boolean;
+  last_active_at: string | null;
   last_contacted_at: string | null;
   created_at: string;
 }
@@ -47,12 +57,37 @@ interface ContactNote {
   created_at: string;
 }
 
+interface Guild {
+  id: string;
+  name: string;
+  icon_url: string | null;
+}
+
+interface GuildMember {
+  discord_user_id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+}
+
 /* ── Constants ──────────────────────────────────────────────── */
 
 const RELATIONSHIP_TYPES = [
   'friend', 'family', 'partner', 'colleague',
   'mentor', 'client', 'acquaintance', 'employee', 'manager', 'other',
 ];
+
+const PERMISSION_META: Record<Permission, { label: string; desc: string; color: string }> = {
+  chat_only: { label: 'Chat Only',   desc: 'Can talk to Raven. No Ash data shared.',       color: '#a78bfa' },
+  updates:   { label: 'Updates',     desc: 'Can receive project updates Ash shares.',       color: '#fbbf24' },
+  full:      { label: 'Full Access', desc: 'Treated like Ash. Close trust only.',           color: '#34d399' },
+};
+
+const ACCESS_ROLE_META: Record<AccessRole, { label: string; color: string }> = {
+  contact: { label: 'Contact', color: 'rgba(167,139,250,0.2)' },
+  family:  { label: 'Family',  color: 'rgba(251,113,133,0.2)' },
+  team:    { label: 'Team',    color: 'rgba(52,211,153,0.2)'  },
+};
 
 const REL_COLORS: Record<string, string> = {
   friend:       'rgba(167,139,250,0.2)',
@@ -218,6 +253,7 @@ function PersonModal({ initial, onClose, onSaved }: {
     notes: initial?.notes ?? '',
     discord_username: initial?.discord_username ?? '',
     discord_user_id: initial?.discord_user_id ?? '',
+    telegram_user_id: initial?.telegram_user_id ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -238,6 +274,7 @@ function PersonModal({ initial, onClose, onSaved }: {
         notes: form.notes.trim() || null,
         discord_username: form.discord_username.trim() || null,
         discord_user_id: form.discord_user_id.trim() || null,
+        telegram_user_id: form.telegram_user_id.trim() || null,
       };
       const res = initial
         ? await apiFetch(`/people/${initial.id}`, { method: 'PATCH', body: JSON.stringify(body) })
@@ -292,6 +329,11 @@ function PersonModal({ initial, onClose, onSaved }: {
             </div>
           </div>
 
+          <div style={{ border: '1px solid rgba(52,211,153,0.15)', borderRadius: 10, padding: '10px 14px', background: 'rgba(52,211,153,0.04)' }}>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 8, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Telegram</div>
+            <input placeholder="Telegram User ID (optional)" value={form.telegram_user_id} onChange={field('telegram_user_id')} style={inputStyle} />
+          </div>
+
           <textarea placeholder="Notes about this person..." value={form.notes} onChange={field('notes')} rows={3}
             style={{ ...inputStyle, resize: 'vertical' }} />
         </div>
@@ -314,12 +356,13 @@ function PersonModal({ initial, onClose, onSaved }: {
 /* ── Person Card ─────────────────────────────────────────────── */
 
 function PersonCard({
-  person, onEdit, onDelete, onToggleContact, onMessage,
+  person, onEdit, onDelete, onToggleContact, onTrustChange, onMessage,
 }: {
   person: Person;
   onEdit: () => void;
   onDelete: () => void;
   onToggleContact: () => void;
+  onTrustChange: (updates: Partial<Person>) => void;
   onMessage: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -409,18 +452,31 @@ function PersonCard({
           </div>
         </div>
 
-        {/* Actions */}
+          {/* Actions */}
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-          {/* Privacy toggle */}
+          {/* Trust toggle */}
+          <button
+            onClick={async () => {
+              const res = await apiFetch(`/people/${person.id}`, { method: 'PATCH', body: JSON.stringify({ trusted_contact: !person.trusted_contact }) });
+              const updated = await res.json() as Person;
+              onTrustChange(updated);
+            }}
+            title={person.trusted_contact ? 'Trusted — can message Raven (click to revoke)' : 'Grant access to message Raven'}
+            style={{ background: person.trusted_contact ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${person.trusted_contact ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: person.trusted_contact ? '#fbbf24' : 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center' }}
+          >
+            {person.trusted_contact ? <Lock size={14} /> : <Unlock size={14} />}
+          </button>
+
+          {/* Outreach toggle */}
           <button
             onClick={onToggleContact}
-            title={person.can_raven_contact ? 'Raven can contact — click to revoke' : 'Allow Raven to contact this person'}
+            title={person.can_raven_contact ? 'Raven can DM this person — click to revoke' : 'Allow Raven to DM this person'}
             style={{ background: person.can_raven_contact ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${person.can_raven_contact ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: person.can_raven_contact ? '#34d399' : 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center' }}
           >
             {person.can_raven_contact ? <Shield size={14} /> : <ShieldOff size={14} />}
           </button>
 
-          {/* Message button — only if discord-linked and authorized */}
+          {/* Message button */}
           {person.discord_user_id && person.can_raven_contact && (
             <button onClick={onMessage} title="Send Discord message as Raven"
               style={{ background: 'rgba(88,101,242,0.15)', border: '1px solid rgba(88,101,242,0.35)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#7289da', display: 'flex', alignItems: 'center' }}>
@@ -443,7 +499,7 @@ function PersonCard({
         </div>
       </div>
 
-      {/* Expanded notes panel */}
+      {/* Expanded panel */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -451,6 +507,69 @@ function PersonCard({
             style={{ borderTop: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}
           >
             <div style={{ padding: '14px 20px 18px' }}>
+
+              {/* Trust access section */}
+              {person.trusted_contact && (
+                <div style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+                  <div style={{ color: '#fbbf24', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Lock size={11} /> Raven Access
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {/* Permission level */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {(['chat_only', 'updates', 'full'] as Permission[]).map(p => {
+                        const m = PERMISSION_META[p];
+                        const active = person.permission === p;
+                        return (
+                          <button key={p} onClick={async () => {
+                            const res = await apiFetch(`/people/${person.id}`, { method: 'PATCH', body: JSON.stringify({ permission: p }) });
+                            const u = await res.json() as Person;
+                            onTrustChange(u);
+                          }}
+                            title={m.desc}
+                            style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1px solid ${active ? m.color : 'rgba(255,255,255,0.1)'}`, background: active ? `${m.color}22` : 'transparent', color: active ? m.color : 'rgba(255,255,255,0.4)' }}
+                          >
+                            {m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Access role */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {(['contact', 'family', 'team'] as AccessRole[]).map(r => {
+                        const m = ACCESS_ROLE_META[r];
+                        const active = person.access_role === r;
+                        return (
+                          <button key={r} onClick={async () => {
+                            const res = await apiFetch(`/people/${person.id}`, { method: 'PATCH', body: JSON.stringify({ access_role: r }) });
+                            const u = await res.json() as Person;
+                            onTrustChange(u);
+                          }}
+                            style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1px solid ${active ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)'}`, background: active ? m.color : 'transparent', color: active ? '#fff' : 'rgba(255,255,255,0.35)' }}
+                          >
+                            {m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Say hello */}
+                    {person.discord_user_id && (
+                      <button onClick={async () => {
+                        await apiFetch(`/people/${person.id}/say-hello`, { method: 'POST' });
+                      }}
+                        style={{ padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid rgba(88,101,242,0.4)', background: 'rgba(88,101,242,0.12)', color: '#7289da', display: 'flex', alignItems: 'center', gap: 5 }}
+                        title="Raven sends intro DM on Discord"
+                      >
+                        <Hand size={11} /> Say Hello
+                      </button>
+                    )}
+                    {person.last_active_at && (
+                      <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>Last active {timeAgo(person.last_active_at)}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Raven's summary notes */}
               {person.raven_notes && (
                 <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '10px 14px', marginBottom: 14 }}>
@@ -509,6 +628,122 @@ function PersonCard({
   );
 }
 
+/* ── Guild Picker Modal ────────────────────────────────────────── */
+
+function GuildPickerModal({ onClose, onImport }: {
+  onClose: () => void;
+  onImport: (member: GuildMember) => Promise<void>;
+}) {
+  const [step, setStep]                     = useState<'guild' | 'members'>('guild');
+  const [guilds, setGuilds]                 = useState<Guild[]>([]);
+  const [members, setMembers]               = useState<GuildMember[]>([]);
+  const [selectedGuild, setSelectedGuild]   = useState<Guild | null>(null);
+  const [loadingGuilds, setLoadingGuilds]   = useState(true);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [importing, setImporting]           = useState<string | null>(null);
+  const [search, setSearch]                 = useState('');
+  const [error, setError]                   = useState('');
+
+  useEffect(() => {
+    apiFetch('/people/discord/guilds')
+      .then(r => r.json() as Promise<Guild[]>)
+      .then(data => { setGuilds(data); setLoadingGuilds(false); })
+      .catch(() => { setError('Could not load Discord servers.'); setLoadingGuilds(false); });
+  }, []);
+
+  async function loadMembers(guild: Guild) {
+    setSelectedGuild(guild);
+    setLoadingMembers(true);
+    setStep('members');
+    try {
+      const r = await apiFetch(`/people/discord/guilds/${guild.id}/members`);
+      const data = await r.json() as GuildMember[];
+      setMembers(data);
+    } catch { setError('Could not load members.'); }
+    setLoadingMembers(false);
+  }
+
+  const filtered = members.filter(m =>
+    m.display_name.toLowerCase().includes(search.toLowerCase()) ||
+    m.username.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
+      onClick={onClose}
+    >
+      <motion.div initial={{ scale: 0.92, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92 }}
+        onClick={e => e.stopPropagation()}
+        style={{ background: 'rgba(12,12,20,0.99)', border: '1px solid rgba(88,101,242,0.3)', borderRadius: 22, padding: 28, width: '100%', maxWidth: 460, maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 48px 96px rgba(0,0,0,0.7)' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <h3 style={{ color: '#fff', fontWeight: 700, fontSize: 17, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Server size={16} style={{ color: '#7289da' }} />
+            {step === 'guild' ? 'Pick a Server' : selectedGuild?.name}
+          </h3>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {step === 'members' && (
+              <button onClick={() => { setStep('guild'); setSearch(''); }} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '5px 12px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 12 }}>← Back</button>
+            )}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center' }}><X size={18} /></button>
+          </div>
+        </div>
+
+        {error && <div style={{ color: '#f87171', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+        {step === 'guild' && (
+          loadingGuilds ? <div style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 30 }}>Loading servers...</div>
+          : guilds.length === 0 ? <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: 30 }}>No servers found.</div>
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {guilds.map(g => (
+                <button key={g.id} onClick={() => loadMembers(g)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, cursor: 'pointer', textAlign: 'left' }}>
+                  {g.icon_url
+                    ? <img src={g.icon_url} alt={g.name} width={32} height={32} style={{ borderRadius: '50%' }} />
+                    : <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(88,101,242,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Server size={14} style={{ color: '#7289da' }} /></div>
+                  }
+                  <span style={{ color: '#fff', fontWeight: 500, fontSize: 14 }}>{g.name}</span>
+                </button>
+              ))}
+            </div>
+        )}
+
+        {step === 'members' && (
+          <>
+            <input placeholder="Search members..." value={search} onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '9px 14px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff', fontSize: 13, outline: 'none', fontFamily: 'inherit', marginBottom: 12 }}
+            />
+            {loadingMembers ? <div style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 30 }}>Loading members...</div>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {filtered.map(m => (
+                  <div key={m.discord_user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10 }}>
+                    {m.avatar_url
+                      ? <img src={m.avatar_url} alt={m.display_name} width={28} height={28} style={{ borderRadius: '50%' }} />
+                      : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(88,101,242,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#7289da', fontWeight: 700 }}>{m.display_name[0]}</div>
+                    }
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: '#fff', fontWeight: 500, fontSize: 13 }}>{m.display_name}</div>
+                      <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>@{m.username}</div>
+                    </div>
+                    <button
+                      onClick={async () => { setImporting(m.discord_user_id); await onImport(m); setImporting(null); }}
+                      disabled={importing === m.discord_user_id}
+                      style={{ padding: '5px 12px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      {importing === m.discord_user_id ? '...' : 'Add'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            }
+          </>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
 /* ── Main Screen ─────────────────────────────────────────────── */
 
 export default function PeopleScreen() {
@@ -519,6 +754,7 @@ export default function PeopleScreen() {
   const [search, setSearch] = useState('');
   const [filterRel, setFilterRel] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showGuildPicker, setShowGuildPicker] = useState(false);
   const [editing, setEditing] = useState<Person | undefined>();
   const [messagingPerson, setMessagingPerson] = useState<Person | undefined>();
 
@@ -594,6 +830,12 @@ export default function PeopleScreen() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => setShowGuildPicker(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', background: 'rgba(88,101,242,0.08)', border: '1px solid rgba(88,101,242,0.3)', borderRadius: 10, color: '#7289da', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            >
+              <Server size={14} /> Browse Members
+            </button>
             <button
               onClick={syncDiscord}
               disabled={syncing}
@@ -673,6 +915,7 @@ export default function PeopleScreen() {
                 onEdit={() => { setEditing(p); setShowModal(true); }}
                 onDelete={() => deletePerson(p.id)}
                 onToggleContact={() => toggleContact(p)}
+                onTrustChange={(updated) => setPeople(prev => prev.map(x => x.id === p.id ? { ...x, ...updated } : x))}
                 onMessage={() => setMessagingPerson(p)}
               />
             ))}
@@ -693,6 +936,29 @@ export default function PeopleScreen() {
           <MessageModal
             person={messagingPerson}
             onClose={() => setMessagingPerson(undefined)}
+          />
+        )}
+        {showGuildPicker && (
+          <GuildPickerModal
+            onClose={() => setShowGuildPicker(false)}
+            onImport={async (member) => {
+              // Upsert into people: if discord_user_id already exists, skip; else create
+              const existing = people.find(p => p.discord_user_id === member.discord_user_id);
+              if (existing) return; // already in the list
+              const res = await apiFetch('/people', {
+                method: 'POST',
+                body: JSON.stringify({
+                  name: member.display_name,
+                  discord_user_id: member.discord_user_id,
+                  discord_username: member.username,
+                  discord_avatar_url: member.avatar_url,
+                }),
+              });
+              if (res.ok) {
+                const created = await res.json() as Person;
+                setPeople(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+              }
+            }}
           />
         )}
       </AnimatePresence>

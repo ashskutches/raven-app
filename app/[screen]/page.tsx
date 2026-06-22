@@ -5,7 +5,7 @@ import { useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, MessageSquare, User, Target, BookOpen,
-  Brain, Radio, Zap, DollarSign, Users, Heart,
+  Brain, Radio, Zap, DollarSign, Users,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
@@ -18,16 +18,15 @@ import MindScreen            from '@/components/MindScreen';
 import ActivityScreen        from '@/components/ActivityScreen';
 import EvolutionScreen       from '@/components/EvolutionScreen';
 import CostScreen            from '@/components/CostScreen';
-import ContactsScreen        from '@/components/ContactsScreen';
 import PeopleScreen          from '@/components/PeopleScreen';
 import ShoppingScreen        from '@/components/ShoppingScreen';
 import FinancesScreen        from '@/components/FinancesScreen';
 import AuthGate              from '@/components/AuthGate';
 
-type Screen = 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'mind' | 'activity' | 'evolution' | 'cost' | 'contacts' | 'people' | 'shopping' | 'finances';
+type Screen = 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'mind' | 'activity' | 'evolution' | 'cost' | 'people' | 'shopping' | 'finances';
 
 const VALID_SCREENS = new Set<Screen>([
-  'dashboard', 'chat', 'profile', 'goals', 'library', 'mind', 'activity', 'evolution', 'cost', 'contacts', 'people', 'shopping', 'finances',
+  'dashboard', 'chat', 'profile', 'goals', 'library', 'mind', 'activity', 'evolution', 'cost', 'people', 'shopping', 'finances',
 ]);
 
 const SCREEN_TITLES: Record<Screen, string> = {
@@ -40,26 +39,24 @@ const SCREEN_TITLES: Record<Screen, string> = {
   activity:  'Activity',
   evolution: 'Evolution Queue',
   cost:      'Cost',
-  contacts:  'Trusted Contacts',
   people:    'People',
   shopping:  'Budget & Shopping',
   finances:  'Finances',
 };
 
 const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof LayoutDashboard }> = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'chat',      label: 'Chat',      icon: MessageSquare   },
-  { id: 'profile',   label: 'About Ash', icon: User            },
-  { id: 'goals',     label: 'Goals & Todos', icon: Target          },
-  { id: 'library',   label: 'Research',  icon: BookOpen        },
-  { id: 'mind',      label: 'Mind',      icon: Brain           },
-  { id: 'activity',  label: 'Activity',  icon: Radio           },
-  { id: 'contacts',  label: 'Contacts',  icon: Users           },
-  { id: 'people',    label: 'People',    icon: Heart           },
-  { id: 'shopping',  label: 'Shopping',  icon: DollarSign      },
-  { id: 'finances',  label: 'Finances',  icon: DollarSign      },
-  { id: 'evolution', label: 'Evolve',    icon: Zap             },
-  { id: 'cost',      label: 'Cost',      icon: DollarSign      },
+  { id: 'dashboard', label: 'Dashboard',    icon: LayoutDashboard },
+  { id: 'chat',      label: 'Chat',         icon: MessageSquare   },
+  { id: 'profile',   label: 'About Ash',    icon: User            },
+  { id: 'goals',     label: 'Goals & Todos',icon: Target          },
+  { id: 'library',   label: 'Research',     icon: BookOpen        },
+  { id: 'mind',      label: 'Mind',         icon: Brain           },
+  { id: 'activity',  label: 'Activity',     icon: Radio           },
+  { id: 'people',    label: 'People',       icon: Users           },
+  { id: 'shopping',  label: 'Shopping',     icon: DollarSign      },
+  { id: 'finances',  label: 'Finances',     icon: DollarSign      },
+  { id: 'evolution', label: 'Evolve',       icon: Zap             },
+  { id: 'cost',      label: 'Cost',         icon: DollarSign      },
 ];
 
 export default function ScreenPage() {
@@ -161,7 +158,6 @@ export default function ScreenPage() {
               {screen === 'activity'  && <ActivityScreen />}
               {screen === 'evolution' && <EvolutionScreen onResolved={() => setEvolutionCount(c => Math.max(0, c - 1))} />}
               {screen === 'cost'      && <CostScreen />}
-              {screen === 'contacts'  && <ContactsScreen />}
               {screen === 'people'    && <PeopleScreen />}
               {screen === 'shopping'  && <ShoppingScreen />}
               {screen === 'finances'  && <FinancesScreen />}
