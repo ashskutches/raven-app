@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingCart, Package, CheckCircle2, XCircle,
   ChevronDown, ChevronUp, ExternalLink, Trash2, RefreshCw, Sparkles,
-  Heart, Plus, Link, Star, Wrench, Gift, Target, Laugh, ShoppingBag,
+  Heart, Plus, Link, Star, Wrench, Gift, Target, Laugh, ShoppingBag, Search, Loader2,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
@@ -408,6 +408,11 @@ export default function ShoppingScreen() {
   const [addingWish, setAddingWish]       = useState(false);
   const [showPurchased, setShowPurchased] = useState(false);
 
+  // Research trigger state
+  const [researching, setResearching]       = useState(false);
+  const [researchMsg, setResearchMsg]       = useState<string | null>(null);
+  const [researchError, setResearchError]   = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -425,6 +430,31 @@ export default function ShoppingScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const triggerResearch = async () => {
+    setResearching(true);
+    setResearchMsg(null);
+    setResearchError(false);
+    try {
+      const res = await apiFetch('/amazon/research', { method: 'POST' });
+      const data = await res.json() as { ok?: boolean; message?: string; error?: string };
+      if (res.ok && data.ok) {
+        setResearchMsg(data.message ?? "Raven is researching picks — check Discord in ~60s!");
+        // Auto-refresh picks after 90s so new items appear
+        setTimeout(() => load(), 90_000);
+      } else {
+        setResearchMsg(data.error ?? 'Something went wrong starting research.');
+        setResearchError(true);
+      }
+    } catch {
+      setResearchMsg('Could not reach the server. Is the API running?');
+      setResearchError(true);
+    } finally {
+      setResearching(false);
+      // Auto-dismiss message after 8s
+      setTimeout(() => setResearchMsg(null), 8000);
+    }
+  };
 
   const updateStatus = async (id: string, status: string) => {
     try {
@@ -523,7 +553,7 @@ export default function ShoppingScreen() {
 
       {/* ── Raven's Picks ── */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Sparkles size={14} color="#a78bfa" />
             <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text)' }}>
@@ -537,34 +567,90 @@ export default function ShoppingScreen() {
             )}
           </div>
 
-          {/* Category filter pills */}
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-            {(['all', 'goal-linked', 'useful', 'reward', 'fun'] as const).map(f => {
-              const meta = f === 'all' ? null : CATEGORY_META[f];
-              return (
-                <button
-                  key={f}
-                  id={`pick-filter-${f}`}
-                  onClick={() => setCatFilter(f)}
-                  style={{
-                    fontSize: 11, fontWeight: 600, padding: '3px 10px',
-                    borderRadius: 100, border: 'none', cursor: 'pointer',
-                    background: catFilter === f
-                      ? (meta ? meta.bg : 'rgba(167,139,250,0.15)')
-                      : 'rgba(255,255,255,0.05)',
-                    color: catFilter === f
-                      ? (meta ? meta.color : '#a78bfa')
-                      : 'var(--color-text-subtle)',
-                    transition: 'all 0.15s',
-                    fontFamily: 'var(--font-sans)',
-                  }}
-                >
-                  {meta ? `${meta.emoji} ${meta.label}` : 'All'}
-                </button>
-              );
-            })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Research button */}
+            <motion.button
+              id="shopping-research-btn"
+              onClick={triggerResearch}
+              disabled={researching}
+              whileHover={{ scale: researching ? 1 : 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px', borderRadius: 9, fontSize: 12, fontWeight: 700,
+                background: researching
+                  ? 'rgba(139,92,246,0.08)'
+                  : 'linear-gradient(135deg, rgba(99,102,241,0.18), rgba(139,92,246,0.22))',
+                border: '1px solid rgba(139,92,246,0.35)',
+                color: '#a78bfa', cursor: researching ? 'not-allowed' : 'pointer',
+                fontFamily: 'var(--font-sans)',
+                opacity: researching ? 0.7 : 1,
+                transition: 'all 0.2s',
+                boxShadow: researching ? 'none' : '0 0 12px rgba(139,92,246,0.15)',
+              }}
+            >
+              {researching
+                ? <Loader2 size={12} style={{ animation: 'spin 0.8s linear infinite' }} />
+                : <Search size={12} />}
+              {researching ? 'Researching...' : 'Ask Raven to Research'}
+            </motion.button>
+
+            {/* Category filter pills */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {(['all', 'goal-linked', 'useful', 'reward', 'fun'] as const).map(f => {
+                const meta = f === 'all' ? null : CATEGORY_META[f];
+                return (
+                  <button
+                    key={f}
+                    id={`pick-filter-${f}`}
+                    onClick={() => setCatFilter(f)}
+                    style={{
+                      fontSize: 11, fontWeight: 600, padding: '3px 10px',
+                      borderRadius: 100, border: 'none', cursor: 'pointer',
+                      background: catFilter === f
+                        ? (meta ? meta.bg : 'rgba(167,139,250,0.15)')
+                        : 'rgba(255,255,255,0.05)',
+                      color: catFilter === f
+                        ? (meta ? meta.color : '#a78bfa')
+                        : 'var(--color-text-subtle)',
+                      transition: 'all 0.15s',
+                      fontFamily: 'var(--font-sans)',
+                    }}
+                  >
+                    {meta ? `${meta.emoji} ${meta.label}` : 'All'}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
+
+        {/* Research feedback toast */}
+        <AnimatePresence>
+          {researchMsg && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              style={{
+                marginBottom: 12,
+                padding: '10px 14px',
+                borderRadius: 10,
+                background: researchError
+                  ? 'rgba(248,113,113,0.08)'
+                  : 'rgba(52,211,153,0.08)',
+                border: `1px solid ${researchError ? 'rgba(248,113,113,0.2)' : 'rgba(52,211,153,0.2)'}`,
+                display: 'flex', alignItems: 'center', gap: 8,
+                fontSize: 12.5, color: researchError ? '#f87171' : '#34d399',
+              }}
+            >
+              {researchError
+                ? <XCircle size={14} />
+                : <CheckCircle2 size={14} />}
+              {researchMsg}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <AnimatePresence>
