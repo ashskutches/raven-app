@@ -308,7 +308,7 @@ export default function AshProfileScreen() {
 
   return (
     <div style={{
-      height: '100%', overflowY: 'auto',
+      flex: 1, minHeight: 0, overflowY: 'auto',
       display: 'flex', flexDirection: 'column',
     }}>
       {/* ── Topbar ── */}

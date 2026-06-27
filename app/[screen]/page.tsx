@@ -147,7 +147,7 @@ export default function ScreenPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
+              style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
             >
               {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} />}
               {screen === 'chat'      && <ChatScreen />}
