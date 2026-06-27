@@ -1,36 +1,261 @@
 'use client';
+
+/**
+ * AshProfileScreen — Raven's model of Ash
+ *
+ * Redesigned: no accordion rows. All sections open, card-based layout,
+ * full-height scrollable, clean visual hierarchy.
+ */
+
 import { apiFetch } from '../lib/api';
 import { useEffect, useState, useCallback } from 'react';
-import { User, Target, Heart, Users, Lightbulb, Star, ChevronDown, ChevronUp } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { Collapse } from './Collapse';
+import {
+  User, Target, Heart, Users, Lightbulb, Star,
+  RefreshCw, Brain, ChevronRight, TrendingUp,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-interface Fact { key: string; value: string; confidence?: number; last_updated_at?: string; }
-interface LibraryEntry { id: string; title: string; type: string; content: string; summary?: string; tags?: string[]; confidence?: number; updated_at: string; }
-interface Goal { id: string; title: string; description?: string; status: string; progress: number; why?: string; target_date?: string; }
+/* ── Types ──────────────────────────────────────────────────────────────── */
+
+interface Fact {
+  key:             string;
+  value:           string;
+  confidence?:     number;
+  last_updated_at?: string;
+}
+
+interface LibraryEntry {
+  id:          string;
+  title:       string;
+  type:        string;
+  content:     string;
+  summary?:    string;
+  tags?:       string[];
+  confidence?: number;
+  updated_at:  string;
+}
+
+interface Goal {
+  id:           string;
+  title:        string;
+  description?: string;
+  status:       string;
+  progress:     number;
+  why?:         string;
+  target_date?: string;
+}
+
+/* ── Section config ──────────────────────────────────────────────────────── */
 
 const SECTION_CONFIG = {
-  facts:       { icon: <User size={15} />,        label: 'Key Facts',         color: '#a78bfa', desc: 'Core facts Raven knows about you' },
-  goals:       { icon: <Target size={15} />,      label: 'Active Goals',      color: '#60a5fa', desc: 'What you\'re working toward' },
-  user_fact:   { icon: <Heart size={15} />,       label: 'About Ash',         color: '#f472b6', desc: 'Personal context Raven has learned' },
-  insight:     { icon: <Lightbulb size={15} />,   label: 'Raven\'s Insights', color: '#fbbf24', desc: 'Patterns and observations Raven has noticed' },
-  family:      { icon: <Users size={15} />,       label: 'People',            color: '#34d399', desc: 'Important people in your life' },
-  goal_context:{ icon: <Star size={15} />,        label: 'Goal Context',      color: '#fb923c', desc: 'Background on your goals and motivations' },
-};
+  facts:        { icon: Brain,     label: 'Key Facts',          color: '#a78bfa', gradient: 'linear-gradient(135deg, #6366f1, #7c3aed)' },
+  goals:        { icon: Target,    label: 'Active Goals',       color: '#60a5fa', gradient: 'linear-gradient(135deg, #3b82f6, #2563eb)' },
+  user_fact:    { icon: Heart,     label: 'About Ash',          color: '#f472b6', gradient: 'linear-gradient(135deg, #ec4899, #db2777)' },
+  insight:      { icon: Lightbulb, label: "Raven's Insights",   color: '#fbbf24', gradient: 'linear-gradient(135deg, #f59e0b, #d97706)' },
+  family:       { icon: Users,     label: 'People & Family',    color: '#34d399', gradient: 'linear-gradient(135deg, #10b981, #059669)' },
+  goal_context: { icon: Star,      label: 'Goal Context',       color: '#fb923c', gradient: 'linear-gradient(135deg, #f97316, #ea580c)' },
+} as const;
+
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+
+function SectionHeader({ sectionKey, count }: { sectionKey: keyof typeof SECTION_CONFIG; count: number }) {
+  const cfg = SECTION_CONFIG[sectionKey];
+  const Icon = cfg.icon;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+        background: cfg.gradient,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon size={15} color="#fff" />
+      </div>
+      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text)' }}>
+        {cfg.label}
+      </span>
+      <span style={{
+        fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 100,
+        background: `${cfg.color}20`, color: cfg.color, marginLeft: 2,
+      }}>
+        {count}
+      </span>
+    </div>
+  );
+}
+
+function FactCard({ fact }: { fact: Fact }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.04)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: 12, padding: '14px 16px',
+    }}>
+      <div style={{
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+        color: '#a78bfa', textTransform: 'uppercase', marginBottom: 6,
+      }}>
+        {fact.key.replace(/_/g, ' ')}
+      </div>
+      <div style={{ fontSize: 13.5, color: 'var(--color-text)', lineHeight: 1.55, fontWeight: 500 }}>
+        {fact.value}
+      </div>
+      {fact.last_updated_at && (
+        <div style={{ fontSize: 10.5, color: 'var(--color-text-subtle)', marginTop: 8 }}>
+          Updated {new Date(fact.last_updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GoalCard({ goal, index }: { goal: Goal; index: number }) {
+  const pct = Math.min(100, Math.max(0, goal.progress));
+  const color = pct >= 75 ? '#34d399' : pct >= 40 ? '#60a5fa' : '#a78bfa';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05 }}
+      style={{
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 14, padding: '18px 20px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.4 }}>
+            {goal.title}
+          </div>
+          {goal.description && (
+            <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.55 }}>
+              {goal.description}
+            </div>
+          )}
+        </div>
+        <div style={{
+          fontSize: 20, fontWeight: 800, color,
+          flexShrink: 0, lineHeight: 1,
+        }}>
+          {pct}%
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{
+        height: 5, borderRadius: 100,
+        background: 'rgba(255,255,255,0.06)', overflow: 'hidden',
+      }}>
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.8, delay: index * 0.05 + 0.2, ease: 'easeOut' }}
+          style={{ height: '100%', background: color, borderRadius: 100 }}
+        />
+      </div>
+
+      {goal.why && (
+        <div style={{
+          marginTop: 12, padding: '10px 12px',
+          background: 'rgba(96,165,250,0.07)',
+          borderLeft: '3px solid rgba(96,165,250,0.4)',
+          borderRadius: '0 8px 8px 0',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', marginBottom: 3, letterSpacing: '0.04em' }}>WHY</div>
+          <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>{goal.why}</div>
+        </div>
+      )}
+
+      {goal.target_date && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10 }}>
+          <TrendingUp size={11} color="var(--color-text-subtle)" />
+          <span style={{ fontSize: 11, color: 'var(--color-text-subtle)' }}>
+            Target: {new Date(goal.target_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          </span>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function EntryCard({ entry, index, accentColor }: { entry: LibraryEntry; index: number; accentColor: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = (entry.summary || entry.content).length > 200;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04 }}
+      style={{
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 12, padding: '14px 16px',
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', marginBottom: 6, lineHeight: 1.4 }}>
+        {entry.title}
+      </div>
+
+      <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+        {isLong && !expanded
+          ? (entry.summary || entry.content).slice(0, 200) + '…'
+          : (entry.summary || entry.content)}
+      </div>
+
+      {isLong && (
+        <button
+          onClick={() => setExpanded(e => !e)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            marginTop: 8, background: 'none', border: 'none',
+            cursor: 'pointer', fontSize: 11.5, color: accentColor,
+            fontFamily: 'var(--font-sans)', padding: 0,
+          }}
+        >
+          {expanded ? 'Show less' : 'Read more'}
+          <ChevronRight size={11} style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+        </button>
+      )}
+
+      {entry.tags && entry.tags.length > 0 && (
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
+          {entry.tags.slice(0, 5).map(t => (
+            <span key={t} style={{
+              fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 100,
+              background: `${accentColor}15`, color: accentColor,
+            }}>
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div style={{ fontSize: 10.5, color: 'var(--color-text-subtle)', marginTop: 10 }}>
+        {new Date(entry.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        {entry.confidence != null && ` · ${Math.round(entry.confidence * 100)}% confidence`}
+      </div>
+    </motion.div>
+  );
+}
+
+/* ── Main Screen ─────────────────────────────────────────────────────────── */
 
 export default function AshProfileScreen() {
-  const [facts, setFacts]               = useState<Fact[]>([]);
-  const [goals, setGoals]               = useState<Goal[]>([]);
-  const [libraryByType, setLibraryByType] = useState<Record<string, LibraryEntry[]>>({});
-  const [loading, setLoading]           = useState(true);
-  const [expanded, setExpanded]         = useState<Record<string, boolean>>({ facts: true, goals: true, user_fact: true });
+  const [facts, setFacts]                   = useState<Fact[]>([]);
+  const [goals, setGoals]                   = useState<Goal[]>([]);
+  const [libraryByType, setLibraryByType]   = useState<Record<string, LibraryEntry[]>>({});
+  const [loading, setLoading]               = useState(true);
+  const [refreshing, setRefreshing]         = useState(false);
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
       const [factsRes, goalsRes, libraryRes] = await Promise.all([
         apiFetch(`/library/facts`),
         apiFetch(`/goals?status=active,in_progress`),
-        apiFetch(`/library?types=user_fact,insight,family,goal_context&limit=50`),
+        apiFetch(`/library?types=user_fact,insight,family,goal_context&limit=100`),
       ]);
       if (factsRes.ok) setFacts(await factsRes.json() as Fact[]);
       if (goalsRes.ok) setGoals(await goalsRes.json() as Goal[]);
@@ -45,140 +270,135 @@ export default function AshProfileScreen() {
       }
     } catch { /* silent */ } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const toggle = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
-
-  if (loading) return <div className="profile-screen"><div className="profile-empty">Loading Ash&apos;s profile...</div></div>;
-
-  const hasAnything = facts.length > 0 || goals.length > 0 || Object.keys(libraryByType).length > 0;
-  if (!hasAnything) return (
-    <div className="profile-screen">
-      <div className="profile-empty">
-        <User size={36} opacity={0.3} />
-        <p>Raven hasn&apos;t learned much about you yet.</p>
-        <p style={{ fontSize: 12, opacity: 0.5 }}>Chat with her — she&apos;ll build your profile over time.</p>
+  if (loading) {
+    return (
+      <div style={{
+        height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 12, color: 'var(--color-text-subtle)',
+      }}>
+        <Brain size={32} style={{ opacity: 0.3 }} />
+        <p style={{ fontSize: 13 }}>Loading Ash&apos;s profile...</p>
       </div>
-    </div>
-  );
+    );
+  }
+
+  const totalEntries = Object.values(libraryByType).flat().length;
+  const hasAnything = facts.length > 0 || goals.length > 0 || totalEntries > 0;
+
+  if (!hasAnything) {
+    return (
+      <div style={{
+        height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 12, color: 'var(--color-text-subtle)',
+      }}>
+        <User size={36} style={{ opacity: 0.25 }} />
+        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-muted)' }}>No profile yet</p>
+        <p style={{ fontSize: 12, textAlign: 'center', maxWidth: 240 }}>
+          Chat with Raven — she&apos;ll build a model of you over time.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="profile-screen">
-      <div className="profile-banner">
-        <div className="profile-avatar">🧠</div>
-        <div>
-          <div className="profile-name">Ash</div>
-          <div className="profile-subtitle">
-            {facts.length} facts · {goals.length} active goals · {Object.values(libraryByType).flat().length} library entries
+    <div style={{
+      height: '100%', overflowY: 'auto',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* ── Topbar ── */}
+      <div style={{
+        padding: '18px 28px 0',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 12,
+            background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 20,
+          }}>
+            🧠
+          </div>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-text)', lineHeight: 1.2 }}>About Ash</h1>
+            <p style={{ fontSize: 11.5, color: 'var(--color-text-subtle)', marginTop: 1 }}>
+              {facts.length} facts · {goals.length} goals · {totalEntries} entries
+            </p>
           </div>
         </div>
+        <button
+          id="profile-refresh"
+          onClick={() => fetchAll(true)}
+          disabled={refreshing}
+          style={{
+            background: 'none', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 8, padding: '6px 9px', cursor: 'pointer',
+            color: 'var(--color-text-subtle)', opacity: refreshing ? 0.4 : 1,
+          }}
+        >
+          <RefreshCw size={13} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+        </button>
       </div>
 
-      {/* Key Facts */}
-      {facts.length > 0 && (
-        <ProfileSection sectionKey="facts" expanded={expanded.facts} onToggle={() => toggle('facts')} count={facts.length}>
-          <div className="profile-facts-grid">
-            {facts.map(f => (
-              <div key={f.key} className="profile-fact-card">
-                <div className="profile-fact-key">{f.key.replace(/_/g, ' ')}</div>
-                <div className="profile-fact-value">{f.value}</div>
-                {f.last_updated_at && (
-                  <div className="profile-fact-date">{new Date(f.last_updated_at).toLocaleDateString()}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </ProfileSection>
-      )}
+      {/* ── Scrollable content ── */}
+      <div style={{ flex: 1, padding: '20px 28px 40px', display: 'flex', flexDirection: 'column', gap: 32 }}>
 
-      {/* Active Goals */}
-      {goals.length > 0 && (
-        <ProfileSection sectionKey="goals" expanded={expanded.goals} onToggle={() => toggle('goals')} count={goals.length}>
-          <div className="profile-goals-list">
-            {goals.map(g => (
-              <div key={g.id} className="profile-goal">
-                <div className="profile-goal-header">
-                  <span className="profile-goal-title">{g.title}</span>
-                  <span className="profile-goal-progress">{g.progress}%</span>
-                </div>
-                <div className="profile-goal-bar">
-                  <div className="profile-goal-fill" style={{ width: `${g.progress}%` }} />
-                </div>
-                {g.why && <div className="profile-goal-why">Why: {g.why}</div>}
-                {g.description && <div className="profile-goal-desc">{g.description}</div>}
-              </div>
-            ))}
-          </div>
-        </ProfileSection>
-      )}
-
-      {/* Library entries by type */}
-      {(['user_fact', 'insight', 'family', 'goal_context'] as const).map(type => {
-        const entries = libraryByType[type];
-        if (!entries?.length) return null;
-        return (
-          <ProfileSection
-            key={type}
-            sectionKey={type}
-            expanded={expanded[type] ?? false}
-            onToggle={() => toggle(type)}
-            count={entries.length}
-          >
-            <div className="profile-entries-list">
-              {entries.map((e, i) => (
-                <motion.div
-                  key={e.id}
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="profile-entry"
-                >
-                  <div className="profile-entry-title">{e.title}</div>
-                  <div className="profile-entry-content">{e.summary || e.content.slice(0, 200)}</div>
-                  {e.tags && e.tags.length > 0 && (
-                    <div className="profile-entry-tags">
-                      {e.tags.slice(0, 4).map(t => <span key={t} className="profile-entry-tag">{t}</span>)}
-                    </div>
-                  )}
-                  <div className="profile-entry-meta">
-                    Updated {new Date(e.updated_at).toLocaleDateString()}
-                    {e.confidence != null && ` · ${Math.round(e.confidence * 100)}% confidence`}
-                  </div>
-                </motion.div>
-              ))}
+        {/* ── Key Facts ── */}
+        {facts.length > 0 && (
+          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+            <SectionHeader sectionKey="facts" count={facts.length} />
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+              gap: 10,
+            }}>
+              {facts.map(f => <FactCard key={f.key} fact={f} />)}
             </div>
-          </ProfileSection>
-        );
-      })}
-    </div>
-  );
-}
+          </motion.section>
+        )}
 
-function ProfileSection({ sectionKey, expanded, onToggle, count, children }: {
-  sectionKey: string;
-  expanded: boolean;
-  onToggle: () => void;
-  count: number;
-  children: React.ReactNode;
-}) {
-  const cfg = SECTION_CONFIG[sectionKey as keyof typeof SECTION_CONFIG] ?? SECTION_CONFIG.facts;
-  return (
-    <div className="profile-section">
-      <button className="profile-section-header" onClick={onToggle}>
-        <span className="profile-section-icon" style={{ color: cfg.color }}>{cfg.icon}</span>
-        <div className="profile-section-info">
-          <span className="profile-section-title">{cfg.label}</span>
-          <span className="profile-section-desc">{cfg.desc}</span>
-        </div>
-        <span className="profile-section-count">{count}</span>
-        {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-      </button>
-      <Collapse open={expanded} className="profile-section-body">
-        {children}
-      </Collapse>
+        {/* ── Active Goals ── */}
+        {goals.length > 0 && (
+          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <SectionHeader sectionKey="goals" count={goals.length} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {goals.map((g, i) => <GoalCard key={g.id} goal={g} index={i} />)}
+            </div>
+          </motion.section>
+        )}
+
+        {/* ── Library sections ── */}
+        {(['user_fact', 'insight', 'family', 'goal_context'] as const).map((type, sectionIdx) => {
+          const entries = libraryByType[type];
+          if (!entries?.length) return null;
+          const cfg = SECTION_CONFIG[type];
+          return (
+            <motion.section
+              key={type}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 + sectionIdx * 0.05 }}
+            >
+              <SectionHeader sectionKey={type} count={entries.length} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <AnimatePresence>
+                  {entries.map((e, i) => (
+                    <EntryCard key={e.id} entry={e} index={i} accentColor={cfg.color} />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </motion.section>
+          );
+        })}
+
+      </div>
     </div>
   );
 }
