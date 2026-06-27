@@ -29,6 +29,7 @@
   --color-indigo-bright: #818cf8;
   --color-rose:          #fb7185;
   --color-emerald:       #34d399;
+  --color-teal:          #14b8a6;
 
   /* Text — stronger contrast */
   --color-text:          rgba(255,255,255,0.95);
@@ -2003,6 +2004,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: flex;
   flex-direction: column;
   gap: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .cost-loading, .cost-error {
@@ -2408,6 +2412,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
   max-width: 700px;
   margin: 0 auto;
   width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .finances-loading {
   text-align: center;

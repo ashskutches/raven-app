@@ -100,9 +100,10 @@ function monthLabel(key: string) {
 function OverviewCard({ stats, loading, onRefresh }: {
   stats: WishlistStats | null; loading: boolean; onRefresh: () => void;
 }) {
-  const cats: Array<{ key: WishlistCategory; count: number }> = stats
+  // Null-guard categories — old API versions may not return it
+  const cats: Array<{ key: WishlistCategory; count: number }> = stats?.categories
     ? (['goal-linked', 'useful', 'reward', 'fun'] as WishlistCategory[]).map(k => ({
-        key: k, count: stats.categories[k] ?? 0,
+        key: k, count: stats.categories![k] ?? 0,
       })).filter(c => c.count > 0)
     : [];
 
@@ -166,7 +167,7 @@ function OverviewCard({ stats, loading, onRefresh }: {
           padding: '16px 22px', textAlign: 'center',
         }}>
           <p style={{ fontSize: 36, fontWeight: 800, color: '#34d399', lineHeight: 1 }}>
-            {stats ? fmtUSD(stats.totalPendingValue) : '—'}
+            {stats ? fmtUSD(stats.totalPendingValue ?? (stats as unknown as Record<string,number>).totalPending ?? 0) : '—'}
           </p>
           <p style={{ fontSize: 11, color: 'var(--color-text-subtle)', marginTop: 4 }}>total value</p>
         </div>
@@ -426,19 +427,27 @@ export default function ShoppingScreen() {
   useEffect(() => { load(); }, [load]);
 
   const updateStatus = async (id: string, status: string) => {
-    const res = await apiFetch(`/amazon/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
-    if (res.ok) {
-      const updated = await res.json() as RavenPick;
-      setPicks(prev => prev.filter(p => p.id !== updated.id)); // remove from pending
-      await load(); // refresh stats
+    try {
+      const res = await apiFetch(`/amazon/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      if (res.ok) {
+        const updated = await res.json() as RavenPick;
+        setPicks(prev => prev.filter(p => p.id !== updated.id));
+        await load();
+      }
+    } catch (err) {
+      console.error('[ShoppingScreen] updateStatus failed:', err);
     }
   };
 
   const deletePick = async (id: string) => {
-    const res = await apiFetch(`/amazon/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setPicks(prev => prev.filter(p => p.id !== id));
-      await load();
+    try {
+      const res = await apiFetch(`/amazon/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setPicks(prev => prev.filter(p => p.id !== id));
+        await load();
+      }
+    } catch (err) {
+      console.error('[ShoppingScreen] deletePick failed:', err);
     }
   };
 
@@ -468,20 +477,28 @@ export default function ShoppingScreen() {
   };
 
   const toggleWishPurchased = async (item: WishlistItem) => {
-    const res = await apiFetch(`/amazon/wishlist/${item.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purchased: !item.purchased }),
-    });
-    if (res.ok) {
-      const updated = await res.json() as WishlistItem;
-      setWishlist(prev => prev.map(w => w.id === item.id ? updated : w));
+    try {
+      const res = await apiFetch(`/amazon/wishlist/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchased: !item.purchased }),
+      });
+      if (res.ok) {
+        const updated = await res.json() as WishlistItem;
+        setWishlist(prev => prev.map(w => w.id === item.id ? updated : w));
+      }
+    } catch (err) {
+      console.error('[ShoppingScreen] toggleWishPurchased failed:', err);
     }
   };
 
   const deleteWishlistItem = async (id: string) => {
-    const res = await apiFetch(`/amazon/wishlist/${id}`, { method: 'DELETE' });
-    if (res.ok) setWishlist(prev => prev.filter(w => w.id !== id));
+    try {
+      const res = await apiFetch(`/amazon/wishlist/${id}`, { method: 'DELETE' });
+      if (res.ok) setWishlist(prev => prev.filter(w => w.id !== id));
+    } catch (err) {
+      console.error('[ShoppingScreen] deleteWishlistItem failed:', err);
+    }
   };
 
   const filteredPicks = picks.filter(p => {
@@ -489,8 +506,17 @@ export default function ShoppingScreen() {
     return p.category === catFilter;
   });
 
+  if (loading && picks.length === 0 && !stats) {
+    return (
+      <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-subtle)', fontSize: 13 }}>
+        <ShoppingCart size={18} style={{ marginRight: 8, opacity: 0.4 }} />
+        Loading wishlist...
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, padding: '0 2px', overflowY: 'auto', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, padding: '0 2px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
 
       {/* ── Overview ── */}
       <OverviewCard stats={stats} loading={loading} onRefresh={load} />
