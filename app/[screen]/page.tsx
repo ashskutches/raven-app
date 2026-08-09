@@ -5,16 +5,17 @@ import { useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, MessageSquare, User, Target, BookOpen,
-  Brain, Radio, Zap, DollarSign, Users,
+  Radio, Zap, DollarSign, Users, ShieldQuestion, Sun,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
+import TodayScreen            from '@/components/TodayScreen';
+import ApprovalsScreen        from '@/components/ApprovalsScreen';
 import DashboardScreen       from '@/components/DashboardScreen';
 import ChatScreen            from '@/components/ChatScreen';
 import AshProfileScreen      from '@/components/AshProfileScreen';
 import GoalsScreen           from '@/components/GoalsScreen';
 import ResearchLibraryScreen from '@/components/ResearchLibraryScreen';
-import MindScreen            from '@/components/MindScreen';
 import ActivityScreen        from '@/components/ActivityScreen';
 import EvolutionScreen       from '@/components/EvolutionScreen';
 import CostScreen            from '@/components/CostScreen';
@@ -23,19 +24,21 @@ import ShoppingScreen        from '@/components/ShoppingScreen';
 import FinancesScreen        from '@/components/FinancesScreen';
 import AuthGate              from '@/components/AuthGate';
 
-type Screen = 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'mind' | 'activity' | 'evolution' | 'cost' | 'people' | 'shopping' | 'finances';
+type Screen = 'today' | 'approvals' | 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'activity' | 'evolution' | 'cost' | 'people' | 'shopping' | 'finances';
 
 const VALID_SCREENS = new Set<Screen>([
-  'dashboard', 'chat', 'profile', 'goals', 'library', 'mind', 'activity', 'evolution', 'cost', 'people', 'shopping', 'finances',
+  'today', 'approvals',
+  'dashboard', 'chat', 'profile', 'goals', 'library', 'activity', 'evolution', 'cost', 'people', 'shopping', 'finances',
 ]);
 
 const SCREEN_TITLES: Record<Screen, string> = {
+  today:     'Today',
+  approvals: 'Approvals',
   dashboard: 'Command Center',
   chat:      'Chat with Raven',
   profile:   'About Ash',
   goals:     'Goals & Todos',
   library:   'Research & Library',
-  mind:      "Raven's Mind",
   activity:  'Activity',
   evolution: 'Evolution Queue',
   cost:      'Cost',
@@ -45,12 +48,13 @@ const SCREEN_TITLES: Record<Screen, string> = {
 };
 
 const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof LayoutDashboard }> = [
+  { id: 'today',     label: 'Today',        icon: Sun             },
+  { id: 'approvals', label: 'Approvals',    icon: ShieldQuestion  },
   { id: 'dashboard', label: 'Dashboard',    icon: LayoutDashboard },
   { id: 'chat',      label: 'Chat',         icon: MessageSquare   },
   { id: 'profile',   label: 'About Ash',    icon: User            },
   { id: 'goals',     label: 'Goals & Todos',icon: Target          },
   { id: 'library',   label: 'Research',     icon: BookOpen        },
-  { id: 'mind',      label: 'Mind',         icon: Brain           },
   { id: 'activity',  label: 'Activity',     icon: Radio           },
   { id: 'people',    label: 'People',       icon: Users           },
   { id: 'shopping',  label: 'Shopping',     icon: DollarSign      },
@@ -65,10 +69,10 @@ export default function ScreenPage() {
   const [evolutionCount, setEvolutionCount] = useState(0);
 
   const raw = Array.isArray(params.screen) ? params.screen[0] : params.screen;
-  const screen: Screen = raw && VALID_SCREENS.has(raw as Screen) ? (raw as Screen) : 'dashboard';
+  const screen: Screen = raw && VALID_SCREENS.has(raw as Screen) ? (raw as Screen) : 'today';
 
   const navigate = useCallback((s: string) => {
-    const next = VALID_SCREENS.has(s as Screen) ? s : 'dashboard';
+    const next = VALID_SCREENS.has(s as Screen) ? s : 'today';
     router.push(`/${next}`);
   }, [router]);
 
@@ -149,12 +153,13 @@ export default function ScreenPage() {
               transition={{ duration: 0.18, ease: 'easeOut' }}
               style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
             >
+              {screen === 'today'     && <TodayScreen />}
+              {screen === 'approvals' && <ApprovalsScreen />}
               {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} />}
               {screen === 'chat'      && <ChatScreen />}
               {screen === 'profile'   && <AshProfileScreen />}
               {screen === 'goals'     && <GoalsScreen />}
               {screen === 'library'   && <ResearchLibraryScreen />}
-              {screen === 'mind'      && <MindScreen />}
               {screen === 'activity'  && <ActivityScreen />}
               {screen === 'evolution' && <EvolutionScreen onResolved={() => setEvolutionCount(c => Math.max(0, c - 1))} />}
               {screen === 'cost'      && <CostScreen />}
