@@ -59,7 +59,7 @@ export default function BlockagesScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function decide(id: string, status: 'resolved' | 'dismissed') {
+  async function decide(id: string, status: 'resolved' | 'wont_fix') {
     setBusy(id);
     try {
       await apiFetch(`/evolution/${id}`, {
@@ -154,7 +154,7 @@ export default function BlockagesScreen() {
                   <button className="btn btn-success" disabled={busy === item.id} onClick={() => decide(item.id, 'resolved')}>
                     <Check size={14} /> Fixed
                   </button>
-                  <button className="btn btn-ghost" disabled={busy === item.id} onClick={() => decide(item.id, 'dismissed')}>
+                  <button className="btn btn-ghost" disabled={busy === item.id} onClick={() => decide(item.id, 'wont_fix')}>
                     <X size={14} /> Not doing it
                   </button>
                 </div>
