@@ -11,29 +11,32 @@
  *   Work       give her a task, watch it run, answer what she asks
  *   Chat       talk to her
  *   Approvals  decide the things she cannot do alone
+ *   Blockages  what she could not do at all, and why
  *   People     who she is allowed to ask
  */
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ListChecks, MessageSquare, ShieldQuestion, Users } from 'lucide-react';
+import { ListChecks, MessageSquare, ShieldQuestion, Users, Zap } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
 import WorkScreen      from '@/components/WorkScreen';
 import ChatScreen      from '@/components/ChatScreen';
 import ApprovalsScreen from '@/components/ApprovalsScreen';
 import PeopleScreen    from '@/components/PeopleScreen';
+import BlockagesScreen from '@/components/BlockagesScreen';
 import AuthGate        from '@/components/AuthGate';
 
-type Screen = 'work' | 'chat' | 'approvals' | 'people';
+type Screen = 'work' | 'chat' | 'approvals' | 'blockages' | 'people';
 
-const VALID_SCREENS = new Set<Screen>(['work', 'chat', 'approvals', 'people']);
+const VALID_SCREENS = new Set<Screen>(['work', 'chat', 'approvals', 'blockages', 'people']);
 
 const SCREEN_TITLES: Record<Screen, string> = {
   work:      'Work',
   chat:      'Chat',
   approvals: 'Approvals',
+  blockages: 'Blockages',
   people:    'People',
 };
 
@@ -41,6 +44,7 @@ const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof ListChecks }> =
   { id: 'work',      label: 'Work',      icon: ListChecks     },
   { id: 'chat',      label: 'Chat',      icon: MessageSquare  },
   { id: 'approvals', label: 'Approvals', icon: ShieldQuestion },
+  { id: 'blockages', label: 'Blockages', icon: Zap            },
   { id: 'people',    label: 'People',    icon: Users          },
 ];
 
@@ -135,6 +139,7 @@ export default function ScreenPage() {
               {screen === 'work'      && <WorkScreen />}
               {screen === 'chat'      && <ChatScreen />}
               {screen === 'approvals' && <ApprovalsScreen />}
+              {screen === 'blockages' && <BlockagesScreen />}
               {screen === 'people'    && <PeopleScreen />}
             </motion.div>
           </AnimatePresence>
