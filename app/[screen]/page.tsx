@@ -1,103 +1,83 @@
 'use client';
 
+/**
+ * Raven — four screens.
+ *
+ * v2 had thirteen nav items serving a life coach. v3 is a sidekick that gets
+ * things done, and everything that did not serve that is gone rather than
+ * hidden: Dashboard, Today, Goals, Library, Research, Activity, Cost, Finances,
+ * Shopping, Evolution, About Ash, Habits, Check-in, Energy, Sleep, Decisions.
+ *
+ *   Work       give her a task, watch it run, answer what she asks
+ *   Chat       talk to her
+ *   Approvals  decide the things she cannot do alone
+ *   People     who she is allowed to ask
+ */
+
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  LayoutDashboard, MessageSquare, User, Target, BookOpen,
-  Radio, Zap, DollarSign, Users, ShieldQuestion, Sun,
-} from 'lucide-react';
+import { ListChecks, MessageSquare, ShieldQuestion, Users } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
-import TodayScreen            from '@/components/TodayScreen';
-import ApprovalsScreen        from '@/components/ApprovalsScreen';
-import DashboardScreen       from '@/components/DashboardScreen';
-import ChatScreen            from '@/components/ChatScreen';
-import AshProfileScreen      from '@/components/AshProfileScreen';
-import GoalsScreen           from '@/components/GoalsScreen';
-import ResearchLibraryScreen from '@/components/ResearchLibraryScreen';
-import ActivityScreen        from '@/components/ActivityScreen';
-import EvolutionScreen       from '@/components/EvolutionScreen';
-import CostScreen            from '@/components/CostScreen';
-import PeopleScreen          from '@/components/PeopleScreen';
-import ShoppingScreen        from '@/components/ShoppingScreen';
-import FinancesScreen        from '@/components/FinancesScreen';
-import AuthGate              from '@/components/AuthGate';
+import WorkScreen      from '@/components/WorkScreen';
+import ChatScreen      from '@/components/ChatScreen';
+import ApprovalsScreen from '@/components/ApprovalsScreen';
+import PeopleScreen    from '@/components/PeopleScreen';
+import AuthGate        from '@/components/AuthGate';
 
-type Screen = 'today' | 'approvals' | 'dashboard' | 'chat' | 'profile' | 'goals' | 'library' | 'activity' | 'evolution' | 'cost' | 'people' | 'shopping' | 'finances';
+type Screen = 'work' | 'chat' | 'approvals' | 'people';
 
-const VALID_SCREENS = new Set<Screen>([
-  'today', 'approvals',
-  'dashboard', 'chat', 'profile', 'goals', 'library', 'activity', 'evolution', 'cost', 'people', 'shopping', 'finances',
-]);
+const VALID_SCREENS = new Set<Screen>(['work', 'chat', 'approvals', 'people']);
 
 const SCREEN_TITLES: Record<Screen, string> = {
-  today:     'Today',
+  work:      'Work',
+  chat:      'Chat',
   approvals: 'Approvals',
-  dashboard: 'Command Center',
-  chat:      'Chat with Raven',
-  profile:   'About Ash',
-  goals:     'Goals & Todos',
-  library:   'Research & Library',
-  activity:  'Activity',
-  evolution: 'Evolution Queue',
-  cost:      'Cost',
   people:    'People',
-  shopping:  'Budget & Shopping',
-  finances:  'Finances',
 };
 
-const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof LayoutDashboard }> = [
-  { id: 'today',     label: 'Today',        icon: Sun             },
-  { id: 'approvals', label: 'Approvals',    icon: ShieldQuestion  },
-  { id: 'dashboard', label: 'Dashboard',    icon: LayoutDashboard },
-  { id: 'chat',      label: 'Chat',         icon: MessageSquare   },
-  { id: 'profile',   label: 'About Ash',    icon: User            },
-  { id: 'goals',     label: 'Goals & Todos',icon: Target          },
-  { id: 'library',   label: 'Research',     icon: BookOpen        },
-  { id: 'activity',  label: 'Activity',     icon: Radio           },
-  { id: 'people',    label: 'People',       icon: Users           },
-  { id: 'shopping',  label: 'Shopping',     icon: DollarSign      },
-  { id: 'finances',  label: 'Finances',     icon: DollarSign      },
-  { id: 'evolution', label: 'Evolve',       icon: Zap             },
-  { id: 'cost',      label: 'Cost',         icon: DollarSign      },
+const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof ListChecks }> = [
+  { id: 'work',      label: 'Work',      icon: ListChecks     },
+  { id: 'chat',      label: 'Chat',      icon: MessageSquare  },
+  { id: 'approvals', label: 'Approvals', icon: ShieldQuestion },
+  { id: 'people',    label: 'People',    icon: Users          },
 ];
 
 export default function ScreenPage() {
   const params = useParams();
   const router = useRouter();
-  const [evolutionCount, setEvolutionCount] = useState(0);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
 
   const raw = Array.isArray(params.screen) ? params.screen[0] : params.screen;
-  const screen: Screen = raw && VALID_SCREENS.has(raw as Screen) ? (raw as Screen) : 'today';
+  const screen: Screen = raw && VALID_SCREENS.has(raw as Screen) ? (raw as Screen) : 'work';
 
   const navigate = useCallback((s: string) => {
-    const next = VALID_SCREENS.has(s as Screen) ? s : 'today';
-    router.push(`/${next}`);
+    router.push(`/${VALID_SCREENS.has(s as Screen) ? s : 'work'}`);
   }, [router]);
 
   useEffect(() => {
     document.title = `${SCREEN_TITLES[screen]} — Raven`;
   }, [screen]);
 
+  // The approvals badge is the one number worth carrying across every screen:
+  // a queued action blocks a task until it is decided.
   useEffect(() => {
-    async function fetchEvolution() {
+    async function poll() {
       try {
-        const r = await apiFetch('/evolution/summary');
+        const r = await apiFetch('/approvals');
         if (!r.ok) return;
-        const data = await r.json() as { total_pending: number };
-        setEvolutionCount(data.total_pending ?? 0);
+        setPendingApprovals(((await r.json()) as unknown[]).length);
       } catch { /* silent */ }
     }
-    fetchEvolution();
-    const interval = setInterval(fetchEvolution, 30_000);
-    return () => clearInterval(interval);
+    poll();
+    const t = setInterval(poll, 20_000);
+    return () => clearInterval(t);
   }, []);
 
   return (
     <AuthGate>
       <div className="app-layout">
-        {/* Sidebar */}
         <nav className="sidebar">
           <div className="sidebar-logo">
             <div className="raven-icon">🦅</div>
@@ -114,11 +94,11 @@ export default function ScreenPage() {
             >
               <Icon size={17} />
               {label}
-              {id === 'evolution' && evolutionCount > 0 && (
+              {id === 'approvals' && pendingApprovals > 0 && (
                 <span style={{
                   marginLeft: 'auto',
-                  background: 'rgba(251,113,133,0.85)',
-                  color: '#fff',
+                  background: 'rgba(245,158,11,0.9)',
+                  color: '#111',
                   fontSize: '10px',
                   fontWeight: 700,
                   padding: '1px 6px',
@@ -127,14 +107,13 @@ export default function ScreenPage() {
                   minWidth: '18px',
                   textAlign: 'center',
                 }}>
-                  {evolutionCount > 99 ? '99+' : evolutionCount}
+                  {pendingApprovals > 99 ? '99+' : pendingApprovals}
                 </span>
               )}
             </button>
           ))}
         </nav>
 
-        {/* Main */}
         <main className="main-content">
           <header className="topbar">
             <h1 className="topbar-title">{SCREEN_TITLES[screen]}</h1>
@@ -153,19 +132,10 @@ export default function ScreenPage() {
               transition={{ duration: 0.18, ease: 'easeOut' }}
               style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
             >
-              {screen === 'today'     && <TodayScreen />}
-              {screen === 'approvals' && <ApprovalsScreen />}
-              {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} />}
+              {screen === 'work'      && <WorkScreen />}
               {screen === 'chat'      && <ChatScreen />}
-              {screen === 'profile'   && <AshProfileScreen />}
-              {screen === 'goals'     && <GoalsScreen />}
-              {screen === 'library'   && <ResearchLibraryScreen />}
-              {screen === 'activity'  && <ActivityScreen />}
-              {screen === 'evolution' && <EvolutionScreen onResolved={() => setEvolutionCount(c => Math.max(0, c - 1))} />}
-              {screen === 'cost'      && <CostScreen />}
+              {screen === 'approvals' && <ApprovalsScreen />}
               {screen === 'people'    && <PeopleScreen />}
-              {screen === 'shopping'  && <ShoppingScreen />}
-              {screen === 'finances'  && <FinancesScreen />}
             </motion.div>
           </AnimatePresence>
         </main>
