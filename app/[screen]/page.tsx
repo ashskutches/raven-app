@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Raven — four screens.
+ * Raven — five screens.
  *
  * v2 had thirteen nav items serving a life coach. v3 is a sidekick that gets
  * things done, and everything that did not serve that is gone rather than
@@ -13,12 +13,13 @@
  *   Approvals  decide the things she cannot do alone
  *   Blockages  what she could not do at all, and why
  *   People     who she is allowed to ask
+ *   Settings   what she is connected to, what she runs on, what it costs
  */
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ListChecks, MessageSquare, ShieldQuestion, Users, Zap } from 'lucide-react';
+import { ListChecks, MessageSquare, ShieldQuestion, Users, Zap, SlidersHorizontal } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
 import WorkScreen      from '@/components/WorkScreen';
@@ -26,11 +27,12 @@ import ChatScreen      from '@/components/ChatScreen';
 import ApprovalsScreen from '@/components/ApprovalsScreen';
 import PeopleScreen    from '@/components/PeopleScreen';
 import BlockagesScreen from '@/components/BlockagesScreen';
+import SettingsScreen   from '@/components/SettingsScreen';
 import AuthGate        from '@/components/AuthGate';
 
-type Screen = 'work' | 'chat' | 'approvals' | 'blockages' | 'people';
+type Screen = 'work' | 'chat' | 'approvals' | 'blockages' | 'people' | 'settings';
 
-const VALID_SCREENS = new Set<Screen>(['work', 'chat', 'approvals', 'blockages', 'people']);
+const VALID_SCREENS = new Set<Screen>(['work', 'chat', 'approvals', 'blockages', 'people', 'settings']);
 
 const SCREEN_TITLES: Record<Screen, string> = {
   work:      'Work',
@@ -38,6 +40,7 @@ const SCREEN_TITLES: Record<Screen, string> = {
   approvals: 'Approvals',
   blockages: 'Blockages',
   people:    'People',
+  settings:  'Settings',
 };
 
 const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof ListChecks }> = [
@@ -46,6 +49,7 @@ const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof ListChecks }> =
   { id: 'approvals', label: 'Approvals', icon: ShieldQuestion },
   { id: 'blockages', label: 'Blockages', icon: Zap            },
   { id: 'people',    label: 'People',    icon: Users          },
+  { id: 'settings',  label: 'Settings',  icon: SlidersHorizontal },
 ];
 
 export default function ScreenPage() {
@@ -141,6 +145,7 @@ export default function ScreenPage() {
               {screen === 'approvals' && <ApprovalsScreen />}
               {screen === 'blockages' && <BlockagesScreen />}
               {screen === 'people'    && <PeopleScreen />}
+              {screen === 'settings'  && <SettingsScreen />}
             </motion.div>
           </AnimatePresence>
         </main>
