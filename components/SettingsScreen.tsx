@@ -940,6 +940,216 @@ export default function SettingsScreen() {
           </div>
         )}
       </Section>
+
+      <McpServersSection />
     </div>
+  );
+}
+
+// ── External tools (MCP) ─────────────────────────────────────────────────────
+//
+// Self-contained rather than threaded through the `Settings` type and GET /settings:
+// this is an independent capability list and keeping its state local means adding it
+// cannot break the calendar section, which is the reason this screen exists.
+//
+// Shaped like the calendar-feeds block above, including test-before-save, because it
+// is the same problem — a wrong URL should fail while it is still on screen, not
+// later inside a turn where it reads as Raven being broken.
+
+interface McpServer {
+  id: string;
+  name: string;
+  url: string;
+  transport: 'http' | 'sse';
+  enabled: boolean;
+  /** The API returns this instead of the token. It never sends the token back. */
+  has_auth: boolean;
+}
+
+function McpServersSection() {
+  const [servers, setServers] = useState<McpServer[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [flash, setFlash] = useState<{ tone: 'good' | 'warn'; text: string } | null>(null);
+
+  const [id, setId] = useState('');
+  const [url, setUrl] = useState('');
+  const [bearer, setBearer] = useState('');
+  const [probe, setProbe] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await apiFetch('/settings/mcp-servers');
+      if (!r.ok) throw new Error('Could not load servers');
+      const body = await r.json() as { servers: McpServer[] };
+      setServers(body.servers ?? []);
+    } catch {
+      // An unreachable settings API is not "no servers configured" — leave the list
+      // unknown rather than rendering an empty state that looks like a fact.
+      setServers(null);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (key: string, fn: () => Promise<void>) => {
+    setBusy(key); setFlash(null);
+    try { await fn(); }
+    catch (err) { setFlash({ tone: 'warn', text: (err as Error).message }); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <Section
+      icon={<Link2 size={16} />}
+      title="External tools"
+      subtitle="Paste an MCP server URL to give her new capabilities without a deploy — Zapier, Notion, Slack, GitHub, Canva."
+    >
+      {flash && <Note tone={flash.tone}>{flash.text}</Note>}
+
+      {servers === null && (
+        <Note tone="warn">Could not read the server list. That is not the same as none being configured.</Note>
+      )}
+
+      {servers?.length === 0 && (
+        <Note tone="info">
+          Nothing connected yet, so her <code>mcp</code> tool is hidden rather than offered and useless.
+        </Note>
+      )}
+
+      {servers?.map(s => (
+        <div
+          key={s.id}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            padding: '8px 0', borderBottom: '1px solid var(--color-border-subtle)',
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontWeight: 600 }}>
+              {s.name} <code style={{ fontSize: 11, opacity: 0.7 }}>{s.id}</code>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-subtle)', wordBreak: 'break-all' }}>
+              {s.url} · {s.transport}
+              {s.has_auth
+                ? <> · <Lock size={10} style={{ verticalAlign: 'middle' }} /> authenticated</>
+                : ' · no auth'}
+            </div>
+          </div>
+
+          <Toggle
+            on={s.enabled}
+            disabled={busy === s.id}
+            label={`Enable ${s.name}`}
+            onChange={v => act(s.id, async () => {
+              const r = await apiFetch(`/settings/mcp-servers/${encodeURIComponent(s.id)}`, {
+                method: 'PATCH', body: JSON.stringify({ enabled: v }),
+              });
+              const body = await r.json() as { servers?: McpServer[]; error?: string };
+              if (!r.ok || !body.servers) throw new Error(body.error ?? 'Could not change that.');
+              setServers(body.servers);
+            })}
+          />
+
+          <button
+            className="btn btn-ghost"
+            disabled={busy === `del-${s.id}`}
+            style={{ padding: '4px 9px', fontSize: 11 }}
+            onClick={() => act(`del-${s.id}`, async () => {
+              const r = await apiFetch(`/settings/mcp-servers/${encodeURIComponent(s.id)}`, { method: 'DELETE' });
+              const body = await r.json() as { servers?: McpServer[]; error?: string };
+              if (!r.ok || !body.servers) throw new Error(body.error ?? 'Could not remove that.');
+              setServers(body.servers);
+            })}
+          >
+            <Trash2 size={12} /> Remove
+          </button>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+        <input
+          type="text"
+          placeholder="Short id — e.g. zapier"
+          value={id}
+          onChange={e => { setId(e.target.value.toLowerCase()); setProbe(null); }}
+          spellCheck={false}
+          autoComplete="off"
+          aria-label="Server id"
+        />
+        <div style={{ fontSize: 11, color: 'var(--color-text-subtle)', marginTop: -3 }}>
+          Used to name her tools as <code>id:tool</code>, so lowercase letters, digits, hyphen or
+          underscore only.
+        </div>
+
+        <input
+          type="text"
+          placeholder="https://mcp.example.com/mcp"
+          value={url}
+          onChange={e => { setUrl(e.target.value); setProbe(null); }}
+          spellCheck={false}
+          autoComplete="off"
+          aria-label="Server URL"
+        />
+
+        <input
+          type="password"
+          placeholder="Bearer token (if the server needs one)"
+          value={bearer}
+          onChange={e => { setBearer(e.target.value); setProbe(null); }}
+          spellCheck={false}
+          autoComplete="off"
+          aria-label="Bearer token"
+        />
+        <div style={{ fontSize: 11, color: 'var(--color-text-subtle)', marginTop: -3 }}>
+          Stored server-side and never sent back to this screen — the list above can only tell you
+          whether a token exists, not what it is.
+        </div>
+
+        {probe && <Note tone={probe.ok ? 'good' : 'warn'}>{probe.text}</Note>}
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost"
+            disabled={!url.trim() || busy === 'test'}
+            onClick={() => act('test', async () => {
+              setProbe(null);
+              const r = await apiFetch('/settings/mcp-servers/test', {
+                method: 'POST',
+                body: JSON.stringify({ id: id || undefined, url, bearer: bearer || undefined }),
+              });
+              const body = await r.json() as { ok: boolean; count?: number; tools?: string[]; error?: string };
+              setProbe(body.ok
+                ? { ok: true, text: `Connected — ${body.count ?? 0} tool(s)${body.tools?.length ? `: ${body.tools.slice(0, 6).join(', ')}${(body.count ?? 0) > 6 ? '…' : ''}` : ''}` }
+                : { ok: false, text: body.error ?? 'Could not reach that server.' });
+            })}
+          >
+            Test it
+          </button>
+
+          <button
+            className="btn btn-primary"
+            disabled={!url.trim() || !id.trim() || busy === 'add'}
+            onClick={() => act('add', async () => {
+              const r = await apiFetch('/settings/mcp-servers', {
+                method: 'POST',
+                body: JSON.stringify({ id, url, bearer: bearer || undefined }),
+              });
+              const body = await r.json() as { servers?: McpServer[]; error?: string };
+              if (!r.ok || !body.servers) throw new Error(body.error ?? 'Could not add that server.');
+              setServers(body.servers);
+              setId(''); setUrl(''); setBearer(''); setProbe(null);
+              setFlash({ tone: 'good', text: 'Connected. Her tools from that server are live on the next turn.' });
+            })}
+          >
+            <Plus size={14} /> Add server
+          </button>
+        </div>
+      </div>
+
+      <Note tone="info">
+        Reads run immediately. Anything that acts on the outside world queues for your approval,
+        the same as a purchase does, and anything that looks destructive is refused in code.
+      </Note>
+    </Section>
   );
 }
