@@ -19,7 +19,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ListChecks, MessageSquare, ShieldQuestion, Users, Zap, SlidersHorizontal } from 'lucide-react';
+import { ListChecks, MessageSquare, ShieldQuestion, Users, Zap, SlidersHorizontal, Brain } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
 import WorkScreen      from '@/components/WorkScreen';
@@ -28,24 +28,35 @@ import ApprovalsScreen from '@/components/ApprovalsScreen';
 import PeopleScreen    from '@/components/PeopleScreen';
 import BlockagesScreen from '@/components/BlockagesScreen';
 import SettingsScreen   from '@/components/SettingsScreen';
+import MindScreen       from '@/components/MindScreen';
 import AuthGate        from '@/components/AuthGate';
 
-type Screen = 'work' | 'chat' | 'approvals' | 'blockages' | 'people' | 'settings';
+type Screen = 'work' | 'chat' | 'mind' | 'approvals' | 'blockages' | 'people' | 'settings';
 
-const VALID_SCREENS = new Set<Screen>(['work', 'chat', 'approvals', 'blockages', 'people', 'settings']);
+const VALID_SCREENS = new Set<Screen>(['work', 'chat', 'mind', 'approvals', 'blockages', 'people', 'settings']);
 
 const SCREEN_TITLES: Record<Screen, string> = {
   work:      'Work',
   chat:      'Chat',
+  mind:      'Mind',
   approvals: 'Approvals',
   blockages: 'Blockages',
   people:    'People',
   settings:  'Settings',
 };
 
+/**
+ * Mind sits next to Chat rather than at the end.
+ *
+ * It is the other half of the conversation: Chat is what she says when asked, Mind is
+ * what she thought without being asked. It was cut in v3 as coach-era clutter, but the
+ * table behind it never stopped filling — 194 unaddressed questions for Ash had piled
+ * up with nowhere to appear. Buried at the bottom of the nav it would pile up again.
+ */
 const NAV_ITEMS: Array<{ id: Screen; label: string; icon: typeof ListChecks }> = [
   { id: 'work',      label: 'Work',      icon: ListChecks     },
   { id: 'chat',      label: 'Chat',      icon: MessageSquare  },
+  { id: 'mind',      label: 'Mind',      icon: Brain          },
   { id: 'approvals', label: 'Approvals', icon: ShieldQuestion },
   { id: 'blockages', label: 'Blockages', icon: Zap            },
   { id: 'people',    label: 'People',    icon: Users          },
@@ -142,6 +153,7 @@ export default function ScreenPage() {
             >
               {screen === 'work'      && <WorkScreen />}
               {screen === 'chat'      && <ChatScreen />}
+              {screen === 'mind'      && <MindScreen />}
               {screen === 'approvals' && <ApprovalsScreen />}
               {screen === 'blockages' && <BlockagesScreen />}
               {screen === 'people'    && <PeopleScreen />}
