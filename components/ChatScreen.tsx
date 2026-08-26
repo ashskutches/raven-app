@@ -506,14 +506,20 @@ export default function ChatScreen() {
      A finished utterance is sent the moment it lands, so talking to her needs
      no keyboard at all. The one exception is mid-answer: sendMessage refuses
      while she is streaming, so the words go into the box instead of being
-     swallowed, and Ash presses send when she is done. */
+     swallowed, and Ash presses send when she is done.
+
+     He does not have to press it, though — he can just keep talking. So the
+     next utterance carries the box with it. sendMessage clears the input as its
+     first act, and anything parked there (a mid-answer sentence, or a draft
+     typed and never sent) would otherwise be deleted unsent. */
   const handleUtterance = useCallback((text: string) => {
     if (isStreaming) {
       setInput(prev => (prev ? `${prev} ${text}` : text));
       return;
     }
-    sendMessage(text);
-  }, [isStreaming, sendMessage]);
+    const parked = input.trim();
+    sendMessage(parked ? `${parked} ${text}` : text);
+  }, [input, isStreaming, sendMessage]);
 
   const voice = useSpeechInput(handleUtterance);
 
