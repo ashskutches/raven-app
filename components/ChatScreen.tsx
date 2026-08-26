@@ -2,8 +2,9 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Sparkles, ChevronDown, Globe, BookOpen, Database, Zap, Link, Target, ClipboardList } from 'lucide-react';
+import { Send, Sparkles, ChevronDown, Globe, BookOpen, Database, Zap, Link, Target, ClipboardList, Mic } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import { useSpeechInput } from '../lib/speech';
 
 /* ─── Types ──────────────────────────────────────────────────────── */
 interface ToolEvent {
@@ -501,6 +502,27 @@ export default function ChatScreen() {
     }
   }, [messages, isStreaming, conversationId]);
 
+  /* ─── Voice input ──────────────────────────────────────────────
+     A finished utterance is sent the moment it lands, so talking to her needs
+     no keyboard at all. The one exception is mid-answer: sendMessage refuses
+     while she is streaming, so the words go into the box instead of being
+     swallowed, and Ash presses send when she is done.
+
+     He does not have to press it, though — he can just keep talking. So the
+     next utterance carries the box with it. sendMessage clears the input as its
+     first act, and anything parked there (a mid-answer sentence, or a draft
+     typed and never sent) would otherwise be deleted unsent. */
+  const handleUtterance = useCallback((text: string) => {
+    if (isStreaming) {
+      setInput(prev => (prev ? `${prev} ${text}` : text));
+      return;
+    }
+    const parked = input.trim();
+    sendMessage(parked ? `${parked} ${text}` : text);
+  }, [input, isStreaming, sendMessage]);
+
+  const voice = useSpeechInput(handleUtterance);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -579,11 +601,43 @@ export default function ChatScreen() {
 
       {/* Input */}
       <div className="chat-input-area">
+        {/* What she is hearing right now — shown so a misheard sentence is
+            visible before it is sent, not after. */}
+        <AnimatePresence>
+          {(voice.listening || voice.error) && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.18 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 12px', marginBottom: 8, borderRadius: 100,
+                background: voice.error ? 'rgba(244,63,94,0.08)' : 'rgba(167,139,250,0.08)',
+                border: `1px solid ${voice.error ? 'rgba(244,63,94,0.25)' : 'rgba(167,139,250,0.22)'}`,
+                fontSize: '0.8rem',
+                color: voice.error ? 'var(--color-rose)' : 'var(--color-text-muted)',
+              }}
+            >
+              {!voice.error && (
+                <motion.span
+                  animate={{ scale: [1, 1.35, 1], opacity: [0.6, 1, 0.6] }}
+                  transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-lavender)', flexShrink: 0 }}
+                />
+              )}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {voice.error ?? (voice.interim || 'Listening — say it, then pause.')}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="chat-input-wrapper">
           <textarea
             ref={inputRef}
             className="chat-input"
-            placeholder="Talk to Raven... (Enter to send, Shift+Enter for new line)"
+            placeholder={voice.listening
+              ? 'Listening — or type instead'
+              : 'Talk to Raven... (Enter to send, Shift+Enter for new line)'}
             value={input}
             onChange={e => {
               setInput(e.target.value);
@@ -595,6 +649,17 @@ export default function ChatScreen() {
             aria-label="Message input"
             disabled={isStreaming}
           />
+          {voice.supported && (
+            <button
+              className={`mic-btn ${voice.listening ? 'listening' : ''}`}
+              onClick={voice.toggle}
+              aria-label={voice.listening ? 'Stop listening' : 'Talk to Raven'}
+              aria-pressed={voice.listening}
+              title={voice.listening ? 'Stop listening' : 'Talk to Raven'}
+            >
+              <Mic size={16} />
+            </button>
+          )}
           <button
             className="send-btn"
             onClick={() => sendMessage(input)}
