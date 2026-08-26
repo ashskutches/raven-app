@@ -121,8 +121,16 @@ export function useSpeechInput(onUtterance: (text: string) => void): SpeechInput
     wantOnRef.current = false;
     setListening(false);
     setInterim('');
-    try { recRef.current?.stop(); } catch { /* already stopped */ }
+    // Detach before stopping: per spec stop() still "attempts to return a Result
+    // using the audio captured so far", so Chrome delivers one more isFinal
+    // afterwards. A still-attached onresult would refill the buffer and arm a
+    // fresh silence timer for a mic the user already switched off.
+    const rec = recRef.current;
     recRef.current = null;
+    if (rec) {
+      rec.onresult = rec.onerror = rec.onend = null;
+      try { rec.stop(); } catch { /* already stopped */ }
+    }
     flush(); // whatever was said before the mic was cut still counts
   }, [flush]);
 
