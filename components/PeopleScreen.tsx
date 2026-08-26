@@ -7,7 +7,7 @@
  *  - Syncs automatically from Discord guilds
  *  - Tracks relationship type, birthday, contact info
  *  - Logs Raven's intel notes on each person
- *  - Can message authorized people directly via Discord
+ *  - Can message anyone with a linked Discord account, directly via Discord
  *  - Trust access: mark who can message Raven, with permission levels
  *  - Privacy-first: Raven never shares your data without authorization
  */
@@ -16,8 +16,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Plus, Trash2, Edit3, Check, X, Cake,
-  Phone, Mail, RefreshCw, MessageSquare, Shield,
-  ShieldOff, ChevronDown, ChevronUp, Send, StickyNote,
+  Phone, Mail, RefreshCw, MessageSquare,
+  ChevronDown, ChevronUp, Send, StickyNote,
   Search, Wifi, Lock, Unlock, Star, Server, Hand,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
@@ -40,6 +40,7 @@ interface Person {
   discord_username: string | null;
   discord_avatar_url: string | null;
   telegram_user_id: string | null;
+  /** Ash's own outreach marker. Relationship data — nothing gates sending on it. */
   can_raven_contact: boolean;
   trusted_contact: boolean;
   permission: Permission;
@@ -356,12 +357,12 @@ function PersonModal({ initial, onClose, onSaved }: {
 /* ── Person Card ─────────────────────────────────────────────── */
 
 function PersonCard({
-  person, onEdit, onDelete, onToggleContact, onTrustChange, onMessage,
+  person, onEdit, onDelete, onToggleOutreach, onTrustChange, onMessage,
 }: {
   person: Person;
   onEdit: () => void;
   onDelete: () => void;
-  onToggleContact: () => void;
+  onToggleOutreach: () => void;
   onTrustChange: (updates: Partial<Person>) => void;
   onMessage: () => void;
 }) {
@@ -467,17 +468,20 @@ function PersonCard({
             {person.trusted_contact ? <Lock size={14} /> : <Unlock size={14} />}
           </button>
 
-          {/* Outreach toggle */}
+          {/* Outreach marker — a label Ash keeps, not a permission.
+              Raven can DM anyone with a Discord id either way. */}
           <button
-            onClick={onToggleContact}
-            title={person.can_raven_contact ? 'Raven can DM this person — click to revoke' : 'Allow Raven to DM this person'}
-            style={{ background: person.can_raven_contact ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${person.can_raven_contact ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: person.can_raven_contact ? '#34d399' : 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center' }}
+            onClick={onToggleOutreach}
+            title={person.can_raven_contact
+              ? 'Marked for outreach — click to unmark. A label only; it does not change who Raven can message.'
+              : 'Mark for outreach. A label only — Raven can already message anyone with a Discord account.'}
+            style={{ background: person.can_raven_contact ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${person.can_raven_contact ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: person.can_raven_contact ? '#a78bfa' : 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center' }}
           >
-            {person.can_raven_contact ? <Shield size={14} /> : <ShieldOff size={14} />}
+            <Star size={14} fill={person.can_raven_contact ? '#a78bfa' : 'none'} />
           </button>
 
-          {/* Message button */}
-          {person.discord_user_id && person.can_raven_contact && (
+          {/* Message button — a Discord id is the whole requirement */}
+          {person.discord_user_id && (
             <button onClick={onMessage} title="Send Discord message as Raven"
               style={{ background: 'rgba(88,101,242,0.15)', border: '1px solid rgba(88,101,242,0.35)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#7289da', display: 'flex', alignItems: 'center' }}>
               <MessageSquare size={14} />
@@ -789,7 +793,7 @@ export default function PeopleScreen() {
     setPeople(p => p.filter(x => x.id !== id));
   }
 
-  async function toggleContact(person: Person) {
+  async function toggleOutreach(person: Person) {
     const res = await apiFetch(`/people/${person.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ can_raven_contact: !person.can_raven_contact }),
@@ -816,7 +820,7 @@ export default function PeopleScreen() {
   });
 
   const discordLinked = people.filter(p => p.discord_user_id).length;
-  const authorized = people.filter(p => p.can_raven_contact).length;
+  const markedForOutreach = people.filter(p => p.can_raven_contact).length;
 
   return (
     <div style={{ padding: '28px 20px', maxWidth: 740, margin: '0 auto' }}>
@@ -826,7 +830,7 @@ export default function PeopleScreen() {
           <div>
             <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 22, margin: 0 }}>People</h2>
             <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, marginTop: 4 }}>
-              {people.length} contacts · {discordLinked} on Discord · {authorized} Raven can contact
+              {people.length} contacts · {discordLinked} reachable on Discord · {markedForOutreach} marked for outreach
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -885,16 +889,13 @@ export default function PeopleScreen() {
         </select>
       </div>
 
-      {/* Privacy legend */}
+      {/* Legend */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
-          <Shield size={12} style={{ color: '#34d399' }} /> Raven can contact
+          <Star size={12} fill="#a78bfa" style={{ color: '#a78bfa' }} /> Marked for outreach (your label — it gates nothing)
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
-          <ShieldOff size={12} style={{ color: 'rgba(255,255,255,0.25)' }} /> Contact off (Raven only observes)
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
-          <MessageSquare size={12} style={{ color: '#7289da' }} /> Send Discord DM as Raven
+          <MessageSquare size={12} style={{ color: '#7289da' }} /> Send Discord DM as Raven — shown for anyone with a Discord account
         </div>
       </div>
 
@@ -914,7 +915,7 @@ export default function PeopleScreen() {
                 person={p}
                 onEdit={() => { setEditing(p); setShowModal(true); }}
                 onDelete={() => deletePerson(p.id)}
-                onToggleContact={() => toggleContact(p)}
+                onToggleOutreach={() => toggleOutreach(p)}
                 onTrustChange={(updated) => setPeople(prev => prev.map(x => x.id === p.id ? { ...x, ...updated } : x))}
                 onMessage={() => setMessagingPerson(p)}
               />
