@@ -25,7 +25,7 @@ import { motion } from 'framer-motion';
 import {
   Calendar, Check, X, RefreshCw, Unlink, AlertTriangle, Cpu,
   DollarSign, Pause, Play, Ban, ScrollText, Lock, ExternalLink, Info,
-  Link2, Trash2, Plus,
+  Link2, Trash2, Plus, Mail,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
@@ -108,6 +108,13 @@ interface Settings {
     calendars: CalendarRow[];
     readable: boolean;
     enabled_count: number;
+  };
+  mailbox: {
+    connected: boolean;
+    address: string | null;
+    credentials_configured: boolean;
+    connect_url: string | null;
+    sending: string;
   };
   feeds: { items: Feed[]; enabled_count: number };
   calendar_readable: boolean;
@@ -307,7 +314,7 @@ export default function SettingsScreen() {
     );
   }
 
-  const { google, feeds, llm, autonomy, memory } = data;
+  const { google, mailbox, feeds, llm, autonomy, memory } = data;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 56, maxWidth: 820 }}>
@@ -662,6 +669,80 @@ export default function SettingsScreen() {
                 <Unlink size={14} /> Disconnect
               </button>
             </div>
+          </div>
+        )}
+      </Section>
+
+      {/* ── Mailbox ────────────────────────────────────────────────────── */}
+      <Section
+        icon={<Mail size={16} />}
+        title="Email"
+        subtitle="The mailbox Raven sends and receives from. Same connect flow the Leaps & Rebounds agents use — pick an account, and it becomes hers."
+      >
+        {!mailbox.credentials_configured ? (
+          <Note tone="warn">
+            Not set up on the server yet. <code>AGENT_EMAIL_GOOGLE_CLIENT_ID</code> and{' '}
+            <code>AGENT_EMAIL_GOOGLE_CLIENT_SECRET</code> need to be set on raven-api —
+            they are copies of gravity-claw&apos;s own OAuth credentials, because a refresh
+            token can only be refreshed by the client that minted it.
+          </Note>
+        ) : mailbox.connected ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Stat label="Connected mailbox" value={mailbox.address ?? 'unknown address'} />
+            <Note tone="good">{mailbox.sending}</Note>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {mailbox.connect_url && (
+                <a
+                  className="btn btn-ghost"
+                  href={mailbox.connect_url}
+                  style={{ textDecoration: 'none' }}
+                  title="Switch to a different Google account"
+                >
+                  <RefreshCw size={14} /> Connect a different account
+                </a>
+              )}
+              <button
+                className="btn btn-danger"
+                disabled={busy === 'disconnect-mailbox'}
+                onClick={() => act('disconnect-mailbox', async () => {
+                  if (!window.confirm('Disconnect this mailbox from Raven? She loses email access immediately.')) return;
+                  const r = await apiFetch('/settings/mailbox', { method: 'DELETE' });
+                  if (!r.ok) throw new Error('Disconnect failed.');
+                  const body = await r.json() as { note: string };
+                  await load();
+                  setFlash({ tone: 'good', text: body.note });
+                })}
+              >
+                <Unlink size={14} /> Disconnect
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Note tone="info">
+              On the Google screen, tick <strong>all three</strong> boxes. The connect fails
+              outright without <em>&quot;Read, compose, and send emails&quot;</em> — send-only
+              cannot read a message body, which is most of the point.
+            </Note>
+            <Note tone="info">
+              Heads up: Google returns you to <strong>Mission Control</strong>, not here —
+              that flow belongs to gravity-claw. Come back to this page afterwards and the
+              address will be shown.
+            </Note>
+            {mailbox.connect_url ? (
+              <a
+                className="btn btn-primary"
+                href={mailbox.connect_url}
+                style={{ alignSelf: 'flex-start', textDecoration: 'none' }}
+              >
+                <Mail size={14} /> Connect a mailbox
+              </a>
+            ) : (
+              <Note tone="warn">
+                <code>GRAVITY_CLAW_URL</code> is not set on raven-api, so there is nowhere to
+                send you. Set it to gravity-claw&apos;s base URL.
+              </Note>
+            )}
           </div>
         )}
       </Section>
