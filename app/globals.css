@@ -33,8 +33,8 @@
 
   /* Text — stronger contrast */
   --color-text:          rgba(255,255,255,0.95);
-  --color-text-muted:    rgba(255,255,255,0.62);
-  --color-text-subtle:   rgba(255,255,255,0.38);
+  --color-text-muted:    rgba(255,255,255,0.72);
+  --color-text-subtle:   rgba(255,255,255,0.52);
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -190,17 +190,64 @@ body {
   background: rgba(8,6,18,0.3);
 }
 
+/* ── Screen shell ──────────────────────────────────────────────
+   One gutter and one measure for every screen, set here instead of
+   re-guessed per component. Before this, Work, Approvals, Blockages
+   and Settings had no horizontal padding at all — their cards ran
+   flush into the sidebar — while People padded itself to a different
+   width. Chat and Mind opt out via .screen--full: they own a
+   full-height layout with their own internal scroll.
+  ────────────────────────────────────────────────────────────── */
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen--doc {
+  overflow-y: auto;
+  width: 100%;
+  max-width: 936px;
+  margin-inline: auto;
+  padding: 26px 28px 64px;
+}
+
+.screen--full {
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .screen--doc { padding: 18px 16px 48px; }
+}
+
 /* ── Topbar ────────────────────────────────────────────────── */
 .topbar {
   height: 58px;
   border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
-  padding: 0 24px;
-  gap: 16px;
   flex-shrink: 0;
   background: rgba(10,7,25,0.6);
   backdrop-filter: blur(16px);
+}
+
+.topbar-inner {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 936px;
+  margin-inline: auto;
+  padding: 0 28px;
+}
+
+/* Chat and Mind run edge to edge, so their header should too. */
+.topbar-inner--full {
+  max-width: none;
+  padding: 0 24px;
 }
 
 .topbar-title {
@@ -208,6 +255,10 @@ body {
   font-weight: 700;
   flex: 1;
   letter-spacing: -0.2px;
+}
+
+@media (max-width: 720px) {
+  .topbar-inner { padding: 0 16px; }
 }
 
 .topbar-status {
@@ -788,6 +839,124 @@ body {
   align-items: center;
   gap: 8px;
   letter-spacing: -0.3px;
+}
+
+/* ── Work board ────────────────────────────────────────────────
+   The board is read top-down as a pipeline: what she is stopped on,
+   what is moving, what is waiting for a turn. As one flat list a
+   "blocked" row could sit between two "queued" ones, which made the
+   only lane Ash has to act on the hardest thing on the page to find.
+  ────────────────────────────────────────────────────────────── */
+.lane + .lane { margin-top: 26px; }
+
+.lane-header {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding-bottom: 9px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.lane-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.lane-count {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.lane-hint {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--color-text-subtle);
+}
+
+/* The one lane that is a request, not a status. */
+.lane--attention .lane-label { color: var(--color-gold); }
+.lane--attention .lane-header { border-bottom-color: rgba(251,191,36,0.3); }
+
+.task-card {
+  padding: 15px 16px;
+  border-left-width: 3px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.task-card + .task-card { margin-top: 9px; }
+.task-card:hover { background: var(--color-surface-hover); }
+
+.task-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.task-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.1px;
+}
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: var(--color-text-subtle);
+}
+
+.task-note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-top: 6px;
+  color: var(--color-text-muted);
+}
+
+.task-note--blocked { color: var(--color-rose); }
+
+.task-note-label {
+  color: var(--color-text-subtle);
+  text-transform: uppercase;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  margin-right: 6px;
+}
+
+/* State reads as a badge rather than a word the same size as everything
+   else next to it. */
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2px 7px;
+  border-radius: 100px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.state-pill svg { flex-shrink: 0; }
+
+/* Dropdowns inherit the page's light-on-dark text but the OS paints the popup
+   white, so options were white on white. Painting the popup dark fixes every
+   <select> on the console, including the arena picker on the work board. */
+select option {
+  background: #14112a;
+  color: var(--color-text);
 }
 
 .fact-chip {
@@ -2775,3 +2944,22 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 .finances-color-swatch:hover { transform: scale(1.15); }
 .finances-color-swatch.selected { border-color: white; transform: scale(1.15); }
+
+/* ══════════════════════════════════════════════════════════════
+   FOCUS
+   Nothing in the console showed a keyboard focus ring — inputs set
+   `outline: none` on :focus and buttons never had one. This restores
+   it for keyboard users only, so the pointer experience is unchanged.
+   The element selectors are here to out-specify the older
+   `.chat-input { outline: none }`-style rules above.
+   ══════════════════════════════════════════════════════════════ */
+:focus-visible,
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-lavender);
+  outline-offset: 2px;
+}

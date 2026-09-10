@@ -110,10 +110,10 @@ const REL_TEXT: Record<string, string> = {
   colleague:    '#818cf8',
   mentor:       '#fbbf24',
   client:       '#34d399',
-  acquaintance: 'rgba(255,255,255,0.5)',
+  acquaintance: '#b0aebb',
   employee:     '#22d3ee',
   manager:      '#f97316',
-  other:        'rgba(255,255,255,0.35)',
+  other:        '#a6a4b0',
 };
 
 /* ── Helpers ────────────────────────────────────────────────── */
@@ -549,7 +549,7 @@ function PersonCard({
                             const u = await res.json() as Person;
                             onTrustChange(u);
                           }}
-                            style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1px solid ${active ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)'}`, background: active ? m.color : 'transparent', color: active ? '#fff' : 'rgba(255,255,255,0.35)' }}
+                            style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1px solid ${active ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)'}`, background: active ? m.color : 'transparent', color: active ? '#fff' : 'var(--color-text-subtle)' }}
                           >
                             {m.label}
                           </button>
@@ -568,7 +568,7 @@ function PersonCard({
                       </button>
                     )}
                     {person.last_active_at && (
-                      <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>Last active {timeAgo(person.last_active_at)}</span>
+                      <span style={{ color: 'var(--color-text-subtle)', fontSize: 11 }}>Last active {timeAgo(person.last_active_at)}</span>
                     )}
                   </div>
                 </div>
@@ -598,11 +598,11 @@ function PersonCard({
                 <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Loading...</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-                  {notes.length === 0 && <div style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13 }}>No intel notes yet.</div>}
+                  {notes.length === 0 && <div style={{ color: 'var(--color-text-subtle)', fontSize: 13 }}>No intel notes yet.</div>}
                   {notes.map(n => (
                     <div key={n.id} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 12px' }}>
                       <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13, lineHeight: 1.5 }}>{n.note}</div>
-                      <div style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, marginTop: 4 }}>
+                      <div style={{ color: 'var(--color-text-subtle)', fontSize: 11, marginTop: 4 }}>
                         {n.source === 'raven_outreach' ? '🦅 Raven outreach' : n.source === 'raven_observation' ? '🦅 Raven' : '✏️ Manual'} · {timeAgo(n.created_at)}
                       </div>
                     </div>
@@ -728,7 +728,7 @@ function GuildPickerModal({ onClose, onImport }: {
                     }
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ color: '#fff', fontWeight: 500, fontSize: 13 }}>{m.display_name}</div>
-                      <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>@{m.username}</div>
+                      <div style={{ color: 'var(--color-text-subtle)', fontSize: 11 }}>@{m.username}</div>
                     </div>
                     <button
                       onClick={async () => { setImporting(m.discord_user_id); await onImport(m); setImporting(null); }}
@@ -823,13 +823,13 @@ export default function PeopleScreen() {
   const markedForOutreach = people.filter(p => p.can_raven_contact).length;
 
   return (
-    <div style={{ padding: '28px 20px', maxWidth: 740, margin: '0 auto' }}>
+    <div>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 22, margin: 0 }}>People</h2>
-            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, marginTop: 4 }}>
+            <div style={{ color: 'var(--color-text-subtle)', fontSize: 13, marginTop: 4 }}>
               {people.length} contacts · {discordLinked} reachable on Discord · {markedForOutreach} marked for outreach
             </div>
           </div>
@@ -891,10 +891,10 @@ export default function PeopleScreen() {
 
       {/* Legend */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-subtle)', fontSize: 12 }}>
           <Star size={12} fill="#a78bfa" style={{ color: '#a78bfa' }} /> Marked for outreach (your label — it gates nothing)
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-subtle)', fontSize: 12 }}>
           <MessageSquare size={12} style={{ color: '#7289da' }} /> Send Discord DM as Raven — shown for anyone with a Discord account
         </div>
       </div>
@@ -903,7 +903,7 @@ export default function PeopleScreen() {
       {loading ? (
         <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', padding: 60 }}>Loading...</div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', padding: 60 }}>
+        <div style={{ textAlign: 'center', color: 'var(--color-text-subtle)', padding: 60 }}>
           {search || filterRel ? 'No people match your filters.' : 'No people yet. Click "Sync Discord" to auto-import from your servers, or add someone manually.'}
         </div>
       ) : (

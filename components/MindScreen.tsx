@@ -129,7 +129,7 @@ const ACTION_LABEL: Record<string, { label: string; color: string }> = {
   request_filed: { label: 'Filed a request',       color: '#fbbf24' },
   retracted:     { label: 'Retracted a belief',    color: '#f472b6' },
   acknowledged:  { label: 'Acknowledged',          color: '#34d399' },
-  none:          { label: 'No action needed',      color: 'rgba(255,255,255,0.38)' },
+  none:          { label: 'No action needed',      color: 'var(--color-text-subtle)' },
 };
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */

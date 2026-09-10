@@ -35,6 +35,15 @@ type Screen = 'work' | 'chat' | 'mind' | 'approvals' | 'blockages' | 'people' | 
 
 const VALID_SCREENS = new Set<Screen>(['work', 'chat', 'mind', 'approvals', 'blockages', 'people', 'settings']);
 
+/**
+ * Chat and Mind lay themselves out full-height and scroll internally; the rest
+ * are documents that scroll as one column. That column — gutter, measure,
+ * bottom padding — belongs here rather than being re-guessed inside each
+ * screen, which is how Work and Approvals ended up with no horizontal padding
+ * at all while People padded itself to a different width.
+ */
+const FULL_HEIGHT_SCREENS = new Set<Screen>(['chat', 'mind']);
+
 const SCREEN_TITLES: Record<Screen, string> = {
   work:      'Work',
   chat:      'Chat',
@@ -135,10 +144,14 @@ export default function ScreenPage() {
 
         <main className="main-content">
           <header className="topbar">
-            <h1 className="topbar-title">{SCREEN_TITLES[screen]}</h1>
-            <div className="topbar-status">
-              <span className="status-dot" />
-              Raven is online
+            {/* Same measure as .screen--doc so the page title sits over the
+                left edge of the content rather than 100px off it. */}
+            <div className={`topbar-inner ${FULL_HEIGHT_SCREENS.has(screen) ? 'topbar-inner--full' : ''}`}>
+              <h1 className="topbar-title">{SCREEN_TITLES[screen]}</h1>
+              <div className="topbar-status">
+                <span className="status-dot" />
+                Raven is online
+              </div>
             </div>
           </header>
 
@@ -149,7 +162,7 @@ export default function ScreenPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
+              className={`screen ${FULL_HEIGHT_SCREENS.has(screen) ? 'screen--full' : 'screen--doc'}`}
             >
               {screen === 'work'      && <WorkScreen />}
               {screen === 'chat'      && <ChatScreen />}

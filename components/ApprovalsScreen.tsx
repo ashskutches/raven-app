@@ -129,7 +129,7 @@ export default function ApprovalsScreen() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32, paddingBottom: 48 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
       {error && (
         <div className="glass" style={{ padding: 14, display: 'flex', gap: 10, alignItems: 'center', borderColor: 'rgba(244,63,94,0.4)' }}>
           <AlertCircle size={16} color="var(--color-rose)" />
