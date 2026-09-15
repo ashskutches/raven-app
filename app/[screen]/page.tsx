@@ -28,6 +28,7 @@ import ApprovalsScreen from '@/components/ApprovalsScreen';
 import PeopleScreen    from '@/components/PeopleScreen';
 import BlockagesScreen from '@/components/BlockagesScreen';
 import SettingsScreen   from '@/components/SettingsScreen';
+import AutonomyBadge    from '@/components/AutonomyBadge';
 import MindScreen       from '@/components/MindScreen';
 import AuthGate        from '@/components/AuthGate';
 
@@ -136,10 +137,11 @@ export default function ScreenPage() {
         <main className="main-content">
           <header className="topbar">
             <h1 className="topbar-title">{SCREEN_TITLES[screen]}</h1>
-            <div className="topbar-status">
-              <span className="status-dot" />
-              Raven is online
-            </div>
+            {/* The leash, not the heartbeat. "Raven is online" stayed true while
+                she was constrained to commissioned work, which made a deliberate
+                setting look like an outage — so the thing on every screen is now
+                the thing that changes what she will do. */}
+            <AutonomyBadge onClick={() => navigate('settings')} />
           </header>
 
           <AnimatePresence mode="wait">

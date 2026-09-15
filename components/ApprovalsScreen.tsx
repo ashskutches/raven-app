@@ -23,6 +23,8 @@ interface PendingRequest {
   action_type: string;
   summary: string | null;
   rationale: string | null;
+  /** Why this is a decision rather than something she already did. */
+  queued_reason: string | null;
   payload: Record<string, unknown>;
   amount_usd: number | null;
   proposed_at: string;
@@ -169,6 +171,14 @@ export default function ApprovalsScreen() {
                       {req.rationale && (
                         <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8 }}>
                           {req.rationale}
+                        </div>
+                      )}
+                      {/* Her reason for wanting it is above; this is the system's
+                          reason for stopping it. When a run of cards all say the
+                          same thing, that is the leash talking and not Raven. */}
+                      {req.queued_reason && (
+                        <div style={{ fontSize: 12, color: 'var(--color-text-subtle)', marginBottom: 8, fontStyle: 'italic' }}>
+                          Waiting because {req.queued_reason}
                         </div>
                       )}
                       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: 'var(--color-text-subtle)' }}>
