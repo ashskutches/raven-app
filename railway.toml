@@ -4,7 +4,9 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-healthcheckPath = "/"
+# `/` is a redirect into an auth-gated screen. See app/api/health/route.ts —
+# two deploys failed on 2026-09-16 probing it, with the container healthy.
+healthcheckPath = "/api/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
