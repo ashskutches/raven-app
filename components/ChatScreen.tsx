@@ -4,6 +4,31 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles, ChevronDown, Globe, BookOpen, Database, Zap, Link, Target, ClipboardList, Mic } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+
+/**
+ * What she says when the stream dies under her.
+ *
+ * This used to be the literal string "I hit a snag. Please try again." — a
+ * character break baked into the UI, in the one place no prompt change can reach.
+ * `core/register.ts`'s FAILURE invariant says she reports a broken tool in the same
+ * voice she uses when it works: what broke, what she thinks caused it, what happens
+ * next, and no apology boilerplate. That invariant governs the model, and the model
+ * never wrote this line — so the UI was free to contradict it, and did.
+ *
+ * It matters more than the word count suggests: a stream error is most likely on a
+ * long turn over a bad connection, which is exactly the shape of a live demo. This
+ * is the sentence an audience reads.
+ *
+ * The cause is shown rather than swallowed. `voiceprint.ts` cannot see this text —
+ * it reads `raven_messages`, and a stream that died wrote no row — so nothing here
+ * is measured, which is precisely why it has to be got right by hand.
+ */
+export function streamFailureLine(cause?: string): string {
+  const detail = (cause ?? '').trim().replace(/\s+/g, ' ').slice(0, 120);
+  return detail
+    ? `The connection dropped mid-answer — ${detail}. Nothing after that point was saved. Send it again and I'll pick it up.`
+    : `The connection dropped mid-answer. Nothing after that point was saved. Send it again and I'll pick it up.`;
+}
 import { useSpeechInput } from '../lib/speech';
 
 /* ─── Types ──────────────────────────────────────────────────────── */
@@ -460,7 +485,9 @@ export default function ChatScreen() {
             // ── Stream error
             if (data.error) {
               setMessages(prev => prev.map(m =>
-                m.id === asstId ? { ...m, content: 'I hit a snag. Please try again.', streaming: false } : m
+                m.id === asstId
+                  ? { ...m, content: streamFailureLine(String(data.error)), streaming: false }
+                  : m
               ));
               apiFetch('/evolution', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -491,7 +518,9 @@ export default function ChatScreen() {
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       setMessages(prev => prev.map(m =>
-        m.id === asstId ? { ...m, content: 'I hit a snag. Please try again.', streaming: false } : m
+        m.id === asstId
+          ? { ...m, content: streamFailureLine((err as Error).message), streaming: false }
+          : m
       ));
       apiFetch('/evolution', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

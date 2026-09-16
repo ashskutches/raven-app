@@ -769,6 +769,7 @@ export default function SettingsScreen() {
                   if (!r.ok) throw new Error((await r.json() as { error?: string }).error ?? 'Could not change model.');
                   const body = await r.json() as { current_model: string };
                   setData(d => d && { ...d, llm: { ...d.llm, current_model: body.current_model } });
+                  window.dispatchEvent(new Event('raven:identity-changed'));
                   setFlash({ tone: 'good', text: `Raven is now running on ${m.label}.` });
                 })}
                 style={{
@@ -1116,7 +1117,12 @@ function VoiceSection() {
                   const r = await apiFetch('/settings/voice', {
                     method: 'PATCH', body: JSON.stringify({ register: o.id }),
                   });
-                  if (r.ok) await load();
+                  if (r.ok) {
+                    await load();
+                    // The topbar carries the register and deliberately does not
+                    // poll for it — see loadIdentity in app/[screen]/page.tsx.
+                    window.dispatchEvent(new Event('raven:identity-changed'));
+                  }
                 } finally {
                   setBusy(null);
                 }

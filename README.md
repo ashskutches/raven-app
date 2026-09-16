@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# raven-app
 
-## Getting Started
+Raven's frontend. Next.js 16 / React 19, deployed to **Railway — never Vercel or
+Netlify**, whatever the boilerplate this file used to contain said.
 
-First, run the development server:
+**`../raven-api/RAVEN.md` is the authoritative reference for the whole system.**
+The screen map and the Console are §5.3; this file only covers running it locally.
+
+## Running it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000, or $PORT
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Everything the browser fetches goes through `app/api/proxy/[...path]/route.ts`,
+which injects the Bearer token server-side so no secret reaches the client bundle.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | What it does |
+|---|---|
+| `RAVEN_API_URL` | Which raven-api to talk to. Read at **request time**, so it can be changed without a rebuild. |
+| `RAVEN_API_SECRET` | The Bearer token. Without it every proxied call returns 401. |
+| `NEXT_PUBLIC_RAVEN_PASSWORD` | The `AuthGate` password. Defaults to `raven`. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Against a local backend
 
-## Learn More
+```bash
+RAVEN_API_URL=http://localhost:3001 RAVEN_API_SECRET=... npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open **Console** and type `/api`. It reports the origin that is actually answering
+and whether a token is configured — never the token itself. Check it before
+demoing: running against production while believing you are on local looks
+identical from the outside until something writes.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Verifying a change
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npx tsc --noEmit     # the real gate
+npm run build        # what Railway runs
+```
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> ⚠️ `npm test` (vitest + jsdom) does not run on Node 20.20.x here — jsdom pulls a
+> bundled `undici` that calls `webidl.util.markAsUncloneable`, and the fork worker
+> dies before any test file loads. It fails identically on a clean checkout, so it
+> is the toolchain and not your change. `tsc --noEmit` and `npm run build` both
+> pass and are the checks to trust until the Node version moves.

@@ -2782,3 +2782,166 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 .finances-color-swatch:hover { transform: scale(1.15); }
 .finances-color-swatch.selected { border-color: white; transform: scale(1.15); }
+
+/* ── Console ───────────────────────────────────────────────────
+ *
+ * A REPL into Raven (components/ConsoleScreen.tsx). Monospace, pinned to the
+ * bottom, no bubbles: the tool calls are the output rather than something hidden
+ * behind a spinner.
+ *
+ * Every colour resolves to a token from :root above. A console that invented its
+ * own terminal green would be the one screen that stops matching the day the
+ * theme moves, and it is the screen most likely to be on a projector.
+ */
+.console {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(99,102,241,0.10), transparent 60%),
+    var(--color-bg);
+  cursor: text;
+}
+
+.console-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 22px 28px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.console-line {
+  white-space: pre-wrap;
+  /* Wrapped output hangs under its first column rather than under the gutter,
+   * so a long tool result stays visually attached to the line that opened it. */
+  padding-left: 2ch;
+  text-indent: -2ch;
+  word-break: break-word;
+}
+
+.console-prompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.console-caret {
+  color: var(--color-lavender);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  flex-shrink: 0;
+}
+
+.console-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  padding: 0;
+  caret-color: var(--color-lavender);
+}
+
+.console-input::placeholder { color: var(--color-text-subtle); }
+.console-input:disabled { color: var(--color-text-muted); }
+
+/* A spinner would claim to know progress. This only claims something is running. */
+.console-working {
+  width: 7px;
+  height: 13px;
+  flex-shrink: 0;
+  background: var(--color-lavender);
+  box-shadow: 0 0 10px var(--color-lavender-glow);
+  animation: console-blink 1s steps(2, start) infinite;
+}
+
+@keyframes console-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.15; }
+}
+
+/* ── The mark ──────────────────────────────────────────────────
+ *
+ * The logo was the 🦅 emoji until 2026-09-16 — which renders as a different
+ * bird on every OS, is the wrong bird, and is the single cheapest thing on the
+ * screen reading cheap in a demo. This is an inline SVG (app/[screen]/page.tsx)
+ * on the same gradient plate the emoji sat on.
+ */
+.sidebar-logo .raven-icon svg {
+  width: 21px;
+  height: 21px;
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
+}
+
+/* ── Topbar status ─────────────────────────────────────────────
+ *
+ * "Raven is online" was a hardcoded string next to a permanently green dot: it
+ * said the same thing whether or not anything was running, which is a status
+ * display that cannot report a failure. It now carries model, register and the
+ * pending-approval count, and the tones below are what let it go amber.
+ */
+.topbar-status.is-warn {
+  background: rgba(251,191,36,0.09);
+  border-color: rgba(251,191,36,0.22);
+  color: var(--color-gold);
+}
+
+.topbar-status.is-warn .status-dot {
+  background: var(--color-gold);
+  box-shadow: 0 0 8px var(--color-gold);
+}
+
+.topbar-status.is-unknown {
+  background: rgba(255,255,255,0.045);
+  border-color: var(--color-border);
+  color: var(--color-text-subtle);
+}
+
+.topbar-status.is-unknown .status-dot {
+  background: var(--color-text-subtle);
+  box-shadow: none;
+  animation: none;
+}
+
+.topbar-status-sep {
+  color: var(--color-text-subtle);
+  margin: 0 2px;
+}
+
+/* ── Nav active indicator ──────────────────────────────────────
+ *
+ * The active pill is a framer-motion `layoutId`, so it slides between items
+ * instead of cutting. The button keeps its own colour change; only the
+ * background moves, and it sits behind the label.
+ */
+.nav-item { position: relative; }
+
+.nav-item.active {
+  /* The plate is the motion element now — this would double it. */
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.nav-active-plate {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-lavender-dim);
+  border: 1px solid rgba(167,139,250,0.25);
+  box-shadow: inset 0 1px 0 rgba(167,139,250,0.15);
+}
+
+/* Anyone who asked not to be moved keeps the instant version. */
+@media (prefers-reduced-motion: reduce) {
+  .console-working { animation: none; }
+}
