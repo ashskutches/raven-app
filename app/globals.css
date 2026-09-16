@@ -236,6 +236,13 @@ body {
   50% { opacity: 0.5; transform: scale(0.85); }
 }
 
+/* Opacity only — `pulse` scales, which reads as a glitch on a text label
+   rather than as a heartbeat. Used on a run that is in flight right now. */
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
 /* ── Buttons ─────────────────────────────────────────────────
    These are the main fix — clear hierarchy, visible at a glance
 ───────────────────────────────────────────────────────────── */

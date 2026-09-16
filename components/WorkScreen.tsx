@@ -16,7 +16,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Loader, CheckCircle2, AlertOctagon, PauseCircle,
-  HelpCircle, ShieldQuestion, ChevronDown, ChevronRight, Play,
+  HelpCircle, ShieldQuestion, ChevronDown, ChevronRight, Play, MessageSquarePlus,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
@@ -65,10 +65,47 @@ interface Report {
   outcome: string;
 }
 
+interface ToolCall {
+  name: string;
+  input: string;
+  ok: boolean;
+  result: string;
+}
+
+interface WorkRun {
+  id: string;
+  run_number: number;
+  started_at: string;
+  ended_at: string | null;
+  steps: number;
+  tool_calls: ToolCall[];
+  progress: string | null;
+  outcome: 'running' | 'continued' | 'done' | 'dropped' | 'waiting' | 'blocked' | 'exhausted' | 'error';
+  error: string | null;
+}
+
+/**
+ * Something Ash said about this task, and what she did about it.
+ *
+ * `action` is filled in by her twice-daily reflection, not on submit — so a
+ * fresh note reads "not looked at yet", which is honest rather than a spinner
+ * pretending something is happening.
+ */
+interface FeedbackItem {
+  id: string;
+  at: string;
+  text: string;
+  processed: boolean;
+  action?: 'guide_note' | 'request_filed' | 'retracted' | 'acknowledged' | 'none';
+  response?: string;
+}
+
 interface TaskDetail extends Task {
   questions: Question[];
   approvals: Approval[];
   report: Report | null;
+  runs: WorkRun[];
+  feedback: FeedbackItem[];
 }
 
 interface Arena { id: string; slug: string; name: string }
@@ -83,17 +120,241 @@ const STATE_META: Record<Task['state'], { label: string; icon: React.ReactNode; 
   dropped: { label: 'Dropped',  icon: <PauseCircle size={13} />,  color: 'var(--color-text-subtle)' },
 };
 
+/**
+ * A run in flight and a run that died look identical in the database: both are
+ * `outcome='running'` with no `ended_at`, because the row is opened at claim
+ * time precisely so a process killed mid-run leaves a trace. Only elapsed time
+ * separates them.
+ *
+ * `MAX_STEPS` is 14 and a step can be a slow search, so a live run is minutes,
+ * not seconds. Twenty is comfortably past the longest real run and comfortably
+ * short of leaving a dead run looking busy all afternoon.
+ */
+const RUN_STALE_MINUTES = 20;
+
+function isLive(run: WorkRun): boolean {
+  if (run.ended_at) return false;
+  return Date.now() - new Date(run.started_at).getTime() < RUN_STALE_MINUTES * 60_000;
+}
+
+/**
+ * How a run ended, in a word and a colour.
+ *
+ * `running` is not a fourth kind of success — it is a run that was claimed and
+ * never reported back. Past `RUN_STALE_MINUTES` that means the process died
+ * mid-flight, and it reads "no reply" rather than "in progress" so it cannot be
+ * mistaken for work still happening. Inside that window it is genuinely working,
+ * and `isLive` overrides this label.
+ */
+const RUN_OUTCOME: Record<WorkRun['outcome'], { label: string; color: string }> = {
+  running:   { label: 'no reply',  color: 'var(--color-rose)' },
+  continued: { label: 'continued', color: 'var(--color-text-subtle)' },
+  done:      { label: 'finished',  color: 'var(--color-emerald)' },
+  dropped:   { label: 'dropped',   color: 'var(--color-text-subtle)' },
+  waiting:   { label: 'asked',     color: 'var(--color-gold)' },
+  blocked:   { label: 'blocked',   color: 'var(--color-rose)' },
+  exhausted: { label: 'out of runs', color: 'var(--color-rose)' },
+  error:     { label: 'errored',   color: 'var(--color-rose)' },
+};
+
+function clockOf(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
+  });
+}
+
+/**
+ * The trail — every run of one task, oldest first.
+ *
+ * This is the answer to "what has she actually been doing". Before it existed
+ * the page could show `run 7/12` and the seventh progress note, and nothing of
+ * the six runs that got her there. The tool calls are collapsed by default
+ * because a fourteen-step run is a wall; the progress note is the story and the
+ * calls are the evidence for it.
+ */
+function RunTrail({ runs }: { runs: WorkRun[] }) {
+  const [openRun, setOpenRun] = useState<string | null>(null);
+  if (!runs?.length) return null;
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{
+        fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em',
+        color: 'var(--color-text-subtle)', marginBottom: 8,
+      }}>
+        Runs ({runs.length})
+      </div>
+
+      {runs.map(run => {
+        const live = isLive(run);
+        const meta = live
+          ? { label: 'working…', color: 'var(--color-lavender)' }
+          : (RUN_OUTCOME[run.outcome] ?? RUN_OUTCOME.continued);
+        const calls = run.tool_calls ?? [];
+        // A live run's calls are the only thing on it — the progress note is
+        // written when it settles — so open it rather than making him click
+        // into the one run that is actually happening.
+        const isOpen = openRun === run.id || (live && openRun === null);
+
+        return (
+          <div key={run.id} style={{
+            borderLeft: `2px solid ${meta.color}`,
+            paddingLeft: 10, marginBottom: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 11 }}>
+              <strong style={{ color: 'var(--color-text)' }}>Run {run.run_number}</strong>
+              <span style={{ color: 'var(--color-text-subtle)' }}>{clockOf(run.started_at)}</span>
+              <span style={{ color: meta.color, ...(live ? { animation: 'breathe 1.6s ease-in-out infinite' } : {}) }}>
+                {meta.label}
+              </span>
+              {calls.length > 0 && (
+                <button
+                  onClick={() => setOpenRun(isOpen ? null : run.id)}
+                  style={{
+                    marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--color-text-subtle)', fontSize: 11, padding: 0,
+                  }}
+                >
+                  {calls.length} tool call{calls.length === 1 ? '' : 's'} {isOpen ? '▾' : '▸'}
+                </button>
+              )}
+            </div>
+
+            {run.progress ? (
+              <div style={{
+                fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4,
+                whiteSpace: 'pre-wrap',
+              }}>
+                {run.progress}
+              </div>
+            ) : live ? (
+              <div style={{ fontSize: 12, color: 'var(--color-text-subtle)', marginTop: 4 }}>
+                {calls.length
+                  ? `${calls.length} step${calls.length === 1 ? '' : 's'} in — ${calls[calls.length - 1].name}`
+                  : 'starting…'}
+              </div>
+            ) : null}
+
+            {run.error && (
+              <div style={{ fontSize: 12, color: 'var(--color-rose)', marginTop: 4 }}>
+                {run.error}
+              </div>
+            )}
+
+            {isOpen && (
+              <div style={{ marginTop: 8 }}>
+                {calls.map((c, i) => (
+                  <div key={i} style={{
+                    fontSize: 11, marginBottom: 6, padding: '6px 8px', borderRadius: 6,
+                    background: 'rgba(0,0,0,0.25)',
+                    borderLeft: `2px solid ${c.ok ? 'var(--color-border-strong)' : 'var(--color-rose)'}`,
+                  }}>
+                    <div style={{ color: 'var(--color-lavender)', fontFamily: 'ui-monospace, monospace' }}>
+                      {c.name}
+                    </div>
+                    <div style={{
+                      color: 'var(--color-text-subtle)', wordBreak: 'break-word',
+                      fontFamily: 'ui-monospace, monospace',
+                    }}>
+                      {c.input}
+                    </div>
+                    {c.result && (
+                      <div style={{
+                        color: c.ok ? 'var(--color-text-muted)' : 'var(--color-rose)',
+                        marginTop: 3, whiteSpace: 'pre-wrap',
+                      }}>
+                        → {c.result}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const FEEDBACK_VERDICT: Record<string, string> = {
+  guide_note:   'added it to how she works',
+  request_filed: 'filed a request for it',
+  retracted:    'dropped what she believed',
+  acknowledged: 'noted it',
+  none:         'decided nothing needed changing',
+};
+
+/**
+ * Notes Ash has left on a finished task, and the box for leaving another.
+ *
+ * Deliberately last and deliberately quiet. Saying nothing is the normal case:
+ * a prompt that reads as an obligation turns every finished task into homework,
+ * and feedback given under duress is worth less than the silence it replaced.
+ *
+ * What she DID with a note is rendered beside it, because a correction that
+ * disappears is indistinguishable from one nobody read — and that is how a
+ * person learns to stop bothering.
+ */
+function FeedbackBlock({
+  items, value, busy, onChange, onSubmit,
+}: {
+  items: FeedbackItem[];
+  value: string;
+  busy: boolean;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+      {items.map(f => (
+        <div key={f.id} style={{ fontSize: 12, marginBottom: 8 }}>
+          <div style={{ color: 'var(--color-text-muted)' }}>&ldquo;{f.text}&rdquo;</div>
+          <div style={{ color: f.processed ? 'var(--color-emerald)' : 'var(--color-text-subtle)', fontSize: 11, marginTop: 2 }}>
+            {f.processed
+              ? `She ${FEEDBACK_VERDICT[f.action ?? 'acknowledged'] ?? 'acted on it'}${f.response ? ` — ${f.response}` : ''}`
+              : 'Not looked at yet — she reviews these at 6am and 6pm'}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <MessageSquarePlus size={13} style={{ color: 'var(--color-text-subtle)', flexShrink: 0 }} />
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') onSubmit(); }}
+          placeholder="Anything she should do differently? (optional)"
+          style={{
+            flex: 1, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--color-border)',
+            borderRadius: 6, padding: '6px 9px', outline: 'none',
+            color: 'var(--color-text)', fontSize: 12,
+          }}
+        />
+        {value.trim() && (
+          <button className="btn btn-ghost" disabled={busy} onClick={onSubmit}>
+            {busy ? 'Saving' : 'Save'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function WorkScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [arenas, setArenas] = useState<Arena[]>([]);
   const [detail, setDetail] = useState<Record<string, TaskDetail>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [title, setTitle] = useState('');
+  const [outcome, setOutcome] = useState('');
   const [arena, setArena] = useState('personal');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [answering, setAnswering] = useState<Record<string, string>>({});
+  const [noting, setNoting] = useState<Record<string, string>>({});
+  const [notingBusy, setNotingBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -116,16 +377,39 @@ export default function WorkScreen() {
     return () => clearInterval(t);
   }, [load]);
 
-  async function openDetail(id: string) {
-    if (expanded === id) { setExpanded(null); return; }
-    setExpanded(id);
+  const loadDetail = useCallback(async (id: string) => {
     try {
       const r = await apiFetch(`/tasks/${id}`);
       if (!r.ok) return;
       const body = await r.json() as TaskDetail;
       setDetail(d => ({ ...d, [id]: body }));
     } catch { /* the row still renders without detail */ }
+  }, []);
+
+  async function openDetail(id: string) {
+    if (expanded === id) { setExpanded(null); return; }
+    setExpanded(id);
+    await loadDetail(id);
   }
+
+  /**
+   * Keep the open task's detail fresh while it is open.
+   *
+   * The detail — which carries the run trail — used to be fetched once, on the
+   * click that expanded the row. So the trail froze at the moment you opened
+   * it: the 15s poll refreshed the list underneath while the thing you were
+   * actually watching went stale, and a run finishing in front of you showed
+   * nothing until you collapsed the row and expanded it again.
+   *
+   * Five seconds rather than the list's fifteen, because the runner publishes
+   * after every tool call and this is the one thing on the page somebody is
+   * deliberately watching.
+   */
+  useEffect(() => {
+    if (!expanded) return;
+    const t = setInterval(() => { loadDetail(expanded); }, 5_000);
+    return () => clearInterval(t);
+  }, [expanded, loadDetail]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -135,19 +419,45 @@ export default function WorkScreen() {
     try {
       const r = await apiFetch('/tasks', {
         method: 'POST',
-        body: JSON.stringify({ title: title.trim(), arena }),
+        body: JSON.stringify({ title: title.trim(), outcome: outcome.trim() || null, arena }),
       });
       if (!r.ok) {
         const b = await r.json().catch(() => ({})) as { error?: string };
         setError(b.error ?? 'That did not go through.');
       } else {
         setTitle('');
+        setOutcome('');
         await load();
       }
     } catch {
       setError('That did not go through.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  /**
+   * Leave a note on a finished task.
+   *
+   * Optional by design — most tasks get nothing, and that has to stay the
+   * frictionless default. This is not an approval step and closing a task does
+   * not wait on it.
+   */
+  async function leaveFeedback(taskId: string) {
+    const text = noting[taskId]?.trim();
+    if (!text || notingBusy) return;
+    setNotingBusy(taskId);
+    try {
+      const r = await apiFetch(`/tasks/${taskId}/feedback`, {
+        method: 'POST',
+        body: JSON.stringify({ feedback: text }),
+      });
+      if (r.ok) {
+        setNoting(n => ({ ...n, [taskId]: '' }));
+        await loadDetail(taskId);
+      }
+    } catch { /* the box keeps what he typed */ } finally {
+      setNotingBusy(null);
     }
   }
 
@@ -211,6 +521,28 @@ export default function WorkScreen() {
             <Send size={14} /> {submitting ? 'Sending' : 'Go'}
           </button>
         </div>
+
+        {/* The acceptance criterion, and the most useful thing on this form.
+            `raven_work.outcome` renders into the run prompt as "Done means: …",
+            and it is what stops a task running its whole budget: without one,
+            when to stop is hers to decide, and a model with runs left will
+            always find more to do. Optional rather than required — a one-line
+            errand does not need one — but prompted, because it is the field
+            most worth filling and it was not on this form at all. */}
+        {title.trim() && (
+          <input
+            value={outcome}
+            onChange={e => setOutcome(e.target.value)}
+            placeholder="Done means… (what she should have when she stops)"
+            style={{
+              width: '100%', marginTop: 10, background: 'rgba(0,0,0,0.2)',
+              border: '1px solid var(--color-border)', borderRadius: 8,
+              padding: '8px 10px', outline: 'none',
+              color: 'var(--color-text)', fontSize: 13,
+            }}
+          />
+        )}
+
         <div style={{ fontSize: 11, color: 'var(--color-text-subtle)', marginTop: 8 }}>
           She works it alone as far as she can, asks only if research genuinely can&apos;t settle it, and reports when it&apos;s done.
         </div>
@@ -285,11 +617,15 @@ export default function WorkScreen() {
                       animate={{ opacity: 1, height: 'auto' }}
                       style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--color-border)' }}
                     >
-                      {d.last_progress && (
+                      {/* The trail supersedes the old single "Last run:" line —
+                          it carries that note as its final entry plus every run
+                          before it. Falling back to `last_progress` covers tasks
+                          that ran before `raven_work_runs` existed. */}
+                      {d.runs?.length ? <RunTrail runs={d.runs} /> : d.last_progress ? (
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, whiteSpace: 'pre-wrap' }}>
                           <strong style={{ color: 'var(--color-text)' }}>Last run: </strong>{d.last_progress}
                         </div>
-                      )}
+                      ) : null}
 
                       {/* Answer her here rather than on Discord */}
                       {openQ.map(q => (
@@ -377,6 +713,22 @@ export default function WorkScreen() {
                   </span>
                 </div>
 
+                {isOpen && d && !d.report && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+                    <RunTrail runs={d.runs} />
+                    <div style={{ fontSize: 12, color: 'var(--color-text-subtle)', fontStyle: 'italic' }}>
+                      Finished without writing a report.
+                    </div>
+                    <FeedbackBlock
+                      items={d.feedback ?? []}
+                      value={noting[task.id] ?? ''}
+                      busy={notingBusy === task.id}
+                      onChange={v => setNoting(n => ({ ...n, [task.id]: v }))}
+                      onSubmit={() => leaveFeedback(task.id)}
+                    />
+                  </div>
+                )}
+
                 {isOpen && d?.report && (
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{d.report.headline}</div>
@@ -394,9 +746,20 @@ export default function WorkScreen() {
                         Used: {[...new Set(d.report.tools_used)].join(', ')}
                       </div>
                     )}
-                    <div style={{ fontSize: 11, color: 'var(--color-text-subtle)', marginTop: 10, fontStyle: 'italic' }}>
-                      Tell her on Discord if any of this was wrong — she&apos;ll remember it.
+                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+                      <RunTrail runs={d.runs} />
                     </div>
+                    {/* Replaces "tell her on Discord if any of this was wrong" —
+                        that line was the only feedback route and it pointed off
+                        the page, at a regex-gated path that attached to whichever
+                        report happened to be most recent rather than to this one. */}
+                    <FeedbackBlock
+                      items={d.feedback ?? []}
+                      value={noting[task.id] ?? ''}
+                      busy={notingBusy === task.id}
+                      onChange={v => setNoting(n => ({ ...n, [task.id]: v }))}
+                      onSubmit={() => leaveFeedback(task.id)}
+                    />
                   </div>
                 )}
               </div>

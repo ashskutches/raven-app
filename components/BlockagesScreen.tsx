@@ -14,8 +14,22 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Bug, Ban, Check, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Zap, Bug, Ban, Check, X, ChevronDown, ChevronRight, Lightbulb, KeyRound } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+
+/**
+ * What she found when she went looking for a way round the wall.
+ *
+ * Present only on a `capability` filing, and only when she actually researched
+ * it — the handler omits the key rather than writing an empty one, because a
+ * heading over nothing reads as "she looked and found nothing", which is a
+ * different and much stronger claim than "she did not look".
+ */
+interface Solution {
+  options: string[];
+  recommended: string;
+  needs_from_ash: string | null;
+}
 
 interface Item {
   id: string;
@@ -108,7 +122,9 @@ export default function BlockagesScreen() {
       ) : shown.map(item => {
         const meta = TYPE_META[item.type] ?? TYPE_META.blocker;
         const isOpen = expanded === item.id;
-        const why = (item.context as { why?: string } | null)?.why;
+        const ctx = item.context as { why?: string; solution?: Solution } | null;
+        const why = ctx?.why;
+        const solution = ctx?.solution ?? null;
 
         return (
           <motion.div key={item.id} layout className="glass" style={{ padding: 16 }}>
@@ -125,6 +141,11 @@ export default function BlockagesScreen() {
                   {(item.hit_count ?? 1) > 1 && (
                     <span style={{ color: 'var(--color-gold)', fontWeight: 600 }}>
                       hit {item.hit_count}×
+                    </span>
+                  )}
+                  {solution && (
+                    <span style={{ color: 'var(--color-lavender)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <Lightbulb size={11} /> has a proposal
                     </span>
                   )}
                   <span>{item.created_at?.slice(0, 10)}</span>
@@ -148,6 +169,50 @@ export default function BlockagesScreen() {
                       What it stopped
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{why}</div>
+                  </div>
+                )}
+
+                {/* The proposal. This is the half that makes the row actionable:
+                    "she cannot make phone calls" is a complaint, "she cannot, and
+                    Vapi does it for ~$0.05/min, and you need an account" is a
+                    decision you can make in thirty seconds. */}
+                {solution && (
+                  <div style={{
+                    marginTop: 12, padding: 12, borderRadius: 8,
+                    background: 'rgba(167,139,250,0.06)',
+                    border: '1px solid rgba(167,139,250,0.22)',
+                  }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                      fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em',
+                      color: 'var(--color-lavender)',
+                    }}>
+                      <Lightbulb size={12} /> What she found
+                    </div>
+
+                    <div style={{ fontSize: 13, color: 'var(--color-text)' }}>
+                      {solution.recommended}
+                    </div>
+
+                    {solution.options?.length > 0 && (
+                      <ul style={{
+                        margin: '8px 0 0', paddingLeft: 16,
+                        fontSize: 12, color: 'var(--color-text-muted)',
+                      }}>
+                        {solution.options.map((o, i) => <li key={i} style={{ marginBottom: 2 }}>{o}</li>)}
+                      </ul>
+                    )}
+
+                    {solution.needs_from_ash && (
+                      <div style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 10,
+                        paddingTop: 10, borderTop: '1px solid rgba(167,139,250,0.18)',
+                        fontSize: 13, color: 'var(--color-gold)',
+                      }}>
+                        <KeyRound size={13} style={{ marginTop: 2, flexShrink: 0 }} />
+                        <span><strong>Needs you:</strong> {solution.needs_from_ash}</span>
+                      </div>
+                    )}
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
