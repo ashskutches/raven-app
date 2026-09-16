@@ -25,7 +25,7 @@ import { motion } from 'framer-motion';
 import {
   Calendar, Check, X, RefreshCw, Unlink, AlertTriangle, Cpu,
   DollarSign, Pause, Play, Ban, ScrollText, Lock, ExternalLink, Info,
-  Link2, Trash2, Plus, Mail,
+  Link2, Trash2, Plus, Mail, Mic, Activity,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
@@ -47,6 +47,8 @@ interface ModelOption {
   outputPrice: number;
   contextWindow: string;
   note: string;
+  /** EQ-Bench 4 Elo — multi-turn social ability. Absent means unmeasured, not bad. */
+  eqBench4?: number;
 }
 
 interface UsageBucket { calls: number; input: number; output: number; cost: number }
@@ -782,6 +784,15 @@ export default function SettingsScreen() {
                     {m.label}
                   </span>
                   {active && <span className="chip" style={{ fontSize: 10 }}>current</span>}
+                  {/* The conversation score, where the model has one. It is on the
+                      card rather than buried in the note because "best at talking to
+                      you" is the reason this one was picked, and a claim like that
+                      should arrive with its number attached. */}
+                  {typeof m.eqBench4 === 'number' && (
+                    <span className="chip" style={{ fontSize: 10 }} title="EQ-Bench 4 Elo — emotional and social ability over 16-turn conversations">
+                      EQ {m.eqBench4}
+                    </span>
+                  )}
                   <span style={{ marginLeft: 'auto', fontSize: 11.5, fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>
                     ${m.inputPrice}/${m.outputPrice} per M · {m.contextWindow}
                   </span>
@@ -1022,8 +1033,159 @@ export default function SettingsScreen() {
         )}
       </Section>
 
+      <VoiceSection />
+
       <McpServersSection />
     </div>
+  );
+}
+
+// ── Voice: the personality dial, and whether it is holding ───────────────────
+
+/**
+ * Self-loading, like `McpServersSection`, because the drift reading is its own
+ * query and a slow or failed read of it must not hold up the rest of Settings.
+ */
+
+interface RegisterOption { id: string; note: string }
+
+interface MarkerMove {
+  key: string; label: string; recent: number; previous: number; changePct: number | null;
+}
+
+interface VoiceState {
+  register: string;
+  default: string;
+  options: RegisterOption[];
+  voiceprint: {
+    recent: { messages: number };
+    drift: number;
+    moved: MarkerMove[];
+    breaches: string[];
+    note: string | null;
+  };
+}
+
+function VoiceSection() {
+  const [state, setState] = useState<VoiceState | null>(null);
+  const [unreachable, setUnreachable] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await apiFetch('/settings/voice');
+      if (!r.ok) throw new Error('unavailable');
+      setState(await r.json() as VoiceState);
+      setUnreachable(false);
+    } catch {
+      // Unknown, not "she has no voice" — an empty state here would read as a fact.
+      setState(null);
+      setUnreachable(true);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (unreachable) {
+    return (
+      <Section icon={<Mic size={16} />} title="Voice" subtitle="How much of herself shows.">
+        <Note tone="warn">Could not read her voice settings. The dial is unchanged either way — she renders at whatever is stored.</Note>
+      </Section>
+    );
+  }
+  if (!state) return null;
+
+  const print = state.voiceprint;
+
+  return (
+    <Section
+      icon={<Mic size={16} />}
+      title="How much of herself shows"
+      subtitle="One dial, four settings. What changes is licence — how much she may spend on something other than the answer. What never changes is the rest: no opening flourish, no narrating her own helpfulness, personality in word choice rather than word count."
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {state.options.map(o => {
+          const active = o.id === state.register;
+          return (
+            <button
+              key={o.id}
+              disabled={busy === o.id}
+              onClick={async () => {
+                setBusy(o.id);
+                try {
+                  const r = await apiFetch('/settings/voice', {
+                    method: 'PATCH', body: JSON.stringify({ register: o.id }),
+                  });
+                  if (r.ok) await load();
+                } finally {
+                  setBusy(null);
+                }
+              }}
+              style={{
+                textAlign: 'left', cursor: 'pointer', padding: '13px 15px',
+                borderRadius: 'var(--radius-sm)',
+                background: active ? 'var(--color-surface-active)' : 'rgba(255,255,255,0.035)',
+                border: `1px solid ${active ? 'var(--color-border-glow)' : 'var(--color-border)'}`,
+                color: 'inherit', font: 'inherit',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: active ? 'var(--color-lavender)' : 'inherit' }}>
+                  {o.id}
+                </span>
+                {active && <span className="chip" style={{ fontSize: 10 }}>current</span>}
+                {o.id === state.default && !active && <span className="chip" style={{ fontSize: 10 }}>default</span>}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+                {o.note}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── The gauge ─────────────────────────────────────────────────────
+          A dial with nothing measuring the result is how "she has more
+          personality now" becomes an opinion. This reads her last turns against
+          the ones before them — deterministic, no model call, so it means the
+          same thing every time it is read. */}
+      <div style={{ marginTop: 16 }}>
+        <div className="section-title" style={{ fontSize: 12, opacity: 0.8 }}>
+          <Activity size={13} />Is it holding?
+        </div>
+
+        {print.note ? (
+          <Note>{print.note}</Note>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', lineHeight: 1.55 }}>
+              <strong style={{ color: 'var(--color-text)' }}>{print.drift}</strong> drift
+              across her last {print.recent.messages} messages, against the {print.recent.messages} before them.
+              This is movement, not quality — changing the dial <em>should</em> move it.
+            </div>
+            {print.moved.length > 0 && (
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
+                {print.moved.map(m => (
+                  <div key={m.key}>
+                    {m.label}{' '}
+                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text)' }}>
+                      {m.changePct !== null && m.changePct > 0 ? '+' : ''}{m.changePct}%
+                    </span>{' '}
+                    <span style={{ opacity: 0.6 }}>({m.previous} → {m.recent})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {print.breaches.length > 0 && (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {print.breaches.map(b => <Note key={b} tone="warn">{b}</Note>)}
+          </div>
+        )}
+      </div>
+    </Section>
   );
 }
 
