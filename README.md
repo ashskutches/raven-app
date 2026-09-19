@@ -36,12 +36,21 @@ identical from the outside until something writes.
 ## Verifying a change
 
 ```bash
-npx tsc --noEmit     # the real gate
+npm test             # vitest + jsdom — the speech buffer, the parked-utterance
+                     # seam, and WorkScreen lane grouping
+npx tsc --noEmit     # types
 npm run build        # what Railway runs
 ```
 
-> ⚠️ `npm test` (vitest + jsdom) does not run on Node 20.20.x here — jsdom pulls a
-> bundled `undici` that calls `webidl.util.markAsUncloneable`, and the fork worker
-> dies before any test file loads. It fails identically on a clean checkout, so it
-> is the toolchain and not your change. `tsc --noEmit` and `npm run build` both
-> pass and are the checks to trust until the Node version moves.
+All three are gates. If `npm test` fails, assume it is your change until you have
+proved otherwise on a clean checkout — the suite is small and every assertion in it
+exists because that behaviour broke once already.
+
+> ⚠️ **The suite needs the Node version jsdom asks for.** `jsdom@30` declares
+> `engines: ^22.22.2 || ^24.15.0 || >=26.0.0`, and it means it: its bundled `undici`
+> calls `markAsUncloneable` from `node:worker_threads`, which older Node does not
+> export, so on Node 20.20.x the fork worker dies before any test file loads.
+> That is a toolchain failure, not a code failure, and it looks nothing like a
+> normal assertion error. On Node 24.19.0 — what this machine runs — the suite
+> passes clean. If yours dies inside `node_modules` before a single test name
+> prints, check `node -v` first.
