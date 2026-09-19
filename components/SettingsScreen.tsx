@@ -24,10 +24,13 @@ import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Calendar, Check, X, RefreshCw, Unlink, AlertTriangle, Cpu,
-  DollarSign, Pause, Play, Ban, ScrollText, Lock, ExternalLink, Info,
+  DollarSign, ShieldCheck, Ban, ScrollText, Lock, ExternalLink, Info,
   Link2, Trash2, Plus, Mail, Mic, Activity,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import {
+  MODE_STYLE, MODE_ORDER, MODE_BLURB, announceAutonomyChange, type AutonomyMode,
+} from './AutonomyBadge';
 
 // ── Types mirroring GET /settings ────────────────────────────────────────────
 
@@ -123,6 +126,7 @@ interface Settings {
   llm: { current_model: string; options: ModelOption[]; usage: Usage };
   autonomy: {
     paused: boolean;
+    mode: AutonomyMode;
     daily_outreach_cap: number;
     unanswered_threshold: number;
     focus_weights: Record<string, number>;
@@ -871,35 +875,67 @@ export default function SettingsScreen() {
       </Section>
 
       {/* ── Autonomy ───────────────────────────────────────────────────── */}
+      {/* Three states, not a switch. The switch could only ask whether she was
+          running, so the only way to stop her acting on her own initiative was
+          to stop her thinking too — and Ash wanted the middle setting, where she
+          reflects freely and waits to be given the job. */}
       <Section
-        icon={autonomy.paused ? <Pause size={16} /> : <Play size={16} />}
-        title="Autonomy"
-        subtitle="The kill switch covers every scheduled job — research, the daily plan, the close-out, proactive messages. Chat keeps working either way."
+        icon={<ShieldCheck size={16} />}
+        title="How much rope"
+        subtitle="What she may do without being asked. Chat works the same in all three — this governs her scheduled work and any action that reaches the outside world."
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <Toggle
-              on={!autonomy.paused}
-              disabled={busy === 'autonomy'}
-              label="Autonomous work enabled"
-              onChange={next => act('autonomy', async () => {
-                const r = await apiFetch('/settings/autonomy', {
-                  method: 'PATCH', body: JSON.stringify({ paused: !next }),
-                });
-                if (!r.ok) throw new Error('Could not change autonomy.');
-                const body = await r.json() as { autonomy: Settings['autonomy'] };
-                setData(d => d && { ...d, autonomy: { ...d.autonomy, ...body.autonomy } });
-              })}
-            />
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>
-                {autonomy.paused ? 'Paused — she only responds when spoken to' : 'Running — she works unprompted'}
-              </div>
-              <div style={{ fontSize: 11.5, color: 'var(--color-text-subtle)' }}>
-                Scheduled jobs, the work runner, and proactive outreach.
-              </div>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {MODE_ORDER.map(mode => {
+              const style = MODE_STYLE[mode];
+              const active = autonomy.mode === mode;
+              const Icon = style.icon;
+              return (
+                <button
+                  key={mode}
+                  disabled={busy === 'autonomy'}
+                  onClick={() => {
+                    if (active) return;
+                    act('autonomy', async () => {
+                      const r = await apiFetch('/settings/autonomy', {
+                        method: 'PATCH', body: JSON.stringify({ mode }),
+                      });
+                      if (!r.ok) throw new Error('Could not change how much rope she has.');
+                      const body = await r.json() as { autonomy: Settings['autonomy'] };
+                      setData(d => d && { ...d, autonomy: { ...d.autonomy, ...body.autonomy } });
+                      // The badge in the topbar polls on its own clock; tell it
+                      // now so it does not sit on the old mode for half a minute.
+                      announceAutonomyChange();
+                    });
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 11, textAlign: 'left',
+                    padding: '11px 13px', borderRadius: 10, cursor: active ? 'default' : 'pointer',
+                    background: active ? `rgba(${style.rgb},0.10)` : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${active ? `rgba(${style.rgb},0.40)` : 'var(--color-border)'}`,
+                  }}
+                >
+                  <Icon size={15} style={{ marginTop: 1, flexShrink: 0, color: active ? `rgb(${style.rgb})` : 'var(--color-text-subtle)' }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: active ? `rgb(${style.rgb})` : 'var(--color-text)' }}>
+                      {style.label}{active && ' — on'}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--color-text-subtle)', lineHeight: 1.5, marginTop: 2 }}>
+                      {MODE_BLURB[mode]}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
+          {autonomy.mode === 'commissioned' && (
+            <Note tone="info">
+              Anything she wants to do that you did not ask for lands in{' '}
+              <strong>Approvals</strong> instead of happening. Tasks she wrote for herself
+              stay on the board and wait.
+            </Note>
+          )}
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
@@ -925,7 +961,9 @@ export default function SettingsScreen() {
               }}
               style={{ width: 76 }}
             />
-            <span style={{ fontSize: 11.5, color: 'var(--color-text-subtle)' }}>clamped 2–8</span>
+            <span style={{ fontSize: 11.5, color: 'var(--color-text-subtle)' }}>
+              clamped 2–8 · approvals are never capped
+            </span>
           </div>
         </div>
       </Section>

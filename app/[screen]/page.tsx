@@ -30,6 +30,7 @@ import ApprovalsScreen from '@/components/ApprovalsScreen';
 import PeopleScreen    from '@/components/PeopleScreen';
 import BlockagesScreen from '@/components/BlockagesScreen';
 import SettingsScreen   from '@/components/SettingsScreen';
+import AutonomyBadge    from '@/components/AutonomyBadge';
 import MindScreen       from '@/components/MindScreen';
 import ConsoleScreen    from '@/components/ConsoleScreen';
 import AuthGate        from '@/components/AuthGate';
@@ -252,12 +253,24 @@ export default function ScreenPage() {
               <div className={`topbar-inner ${FULL_HEIGHT_SCREENS.has(screen) ? 'topbar-inner--full' : ''}`.trim()}>
                 <h1 className="topbar-title">{SCREEN_TITLES[screen]}</h1>
 
+                {/* The leash, not the heartbeat. A commissioned Raven looks exactly
+                    like a broken one from the outside — the board stops moving and
+                    nothing says why — so the constraint gets its own badge rather
+                    than being inferred from a status pill. */}
+                <AutonomyBadge onClick={() => navigate('settings')} />
+
                 {/*
                   * This said "Raven is online" beside a permanently green dot until
                   * 2026-09-16 — the same sentence whether she was reachable, paused,
                   * or sitting on nine approvals. It now carries the three facts that
                   * change what she will actually do, and says "unreachable" when it
                   * cannot read them rather than staying green.
+                  *
+                  * It no longer says "Autonomy paused": the badge beside it states
+                  * the mode in all three of its values, and this pill saying the
+                  * binary version of the same thing was the one way the two could
+                  * disagree on screen. Here "online" means reachable, which is what
+                  * it reads as. The amber `tone` still tracks paused.
                   */}
                 <div className={`topbar-status ${tone}`.trim()}>
                   <span className="status-dot" />
@@ -265,7 +278,7 @@ export default function ScreenPage() {
                     'raven-api unreachable'
                   ) : (
                     <>
-                      {vitals.paused === true ? 'Autonomy paused' : 'Raven is online'}
+                      Raven is online
                       {vitals.model && (
                         <>
                           <span className="topbar-status-sep">·</span>

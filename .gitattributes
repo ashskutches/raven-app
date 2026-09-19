@@ -1,0 +1,31 @@
+# Line endings are normalised in the repository, decided here rather than by
+# whatever core.autocrlf each machine happens to have.
+#
+# Copied from raven-api, which learned this on 2026-09-02: a station branch
+# arrived having rewritten three files to CRLF. Its actual change was 813 lines;
+# the diff read as 4,513 insertions and 3,705 deletions, and it would have
+# conflicted with every other branch touching those files. Nothing in a diffstat
+# says "this is only line endings", so the rewrite is invisible until someone
+# thinks to run `git diff --ignore-all-space`.
+#
+# raven-app had no such file and hit the identical problem on 2026-09-15: a
+# 252-line change committed as 1,892 insertions and 1,671 deletions across three
+# files. Tools that write a file back with the platform's endings are normal on
+# Windows, so this is the only place it can be stopped for good.
+* text=auto eol=lf
+
+# Windows launchers must keep CRLF — cmd.exe and wscript mis-parse LF-only files.
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+*.vbs  text eol=crlf
+
+# Binary: never touched, never diffed as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
