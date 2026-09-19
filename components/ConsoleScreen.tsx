@@ -43,6 +43,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
+import { MODE_STYLE, type AutonomyMode } from './AutonomyBadge';
 
 // ── Lines ────────────────────────────────────────────────────────────────────
 
@@ -110,6 +111,50 @@ const pad = (s: string, n: number) => s + ' '.repeat(Math.max(0, n - s.length));
 /** A signed percentage, because "hedging up 40%" and "down 40%" are different news. */
 const signed = (n: number | null) =>
   n === null ? '—' : `${n > 0 ? '+' : ''}${n}%`;
+
+// ── Autonomy ─────────────────────────────────────────────────────────────────
+
+/** The `autonomy` block of `GET /settings`, as far as this screen reads it. */
+export interface ConsoleAutonomy {
+  paused?: boolean;
+  mode?: string;
+}
+
+/**
+ * How the console states how much rope she has.
+ *
+ * The boolean `paused` cannot answer this question. raven-api derives it as
+ * `mode === 'paused'`, so it is false for a commissioned Raven exactly as it is
+ * for an autonomous one — and the console used to render that `false` as
+ * "running", asserting she works unprompted while her own tasks sit parked. On
+ * the same screen the AutonomyBadge read `mode` and said "On commission only",
+ * so the two disagreed an inch apart. `mode` is the field that distinguishes the
+ * three states; the boolean is only a fallback for a backend too old to send it,
+ * and in that case the most it can honestly claim is "not paused".
+ *
+ * The label comes from MODE_STYLE rather than from a string typed here, so the
+ * badge, Settings and this line cannot drift into naming the same state
+ * differently.
+ */
+export function autonomyStatus(
+  a: ConsoleAutonomy | null | undefined,
+): { kind: LineKind; text: string } {
+  // Paused is the one state that has to say what stopped: chat keeps answering,
+  // so a paused Raven is indistinguishable from a working one until she is
+  // asked for something scheduled.
+  const paused = { kind: 'warn' as LineKind, text: `${MODE_STYLE.paused.label} — her scheduled work is not running` };
+
+  if (a?.mode && a.mode in MODE_STYLE) {
+    const mode = a.mode as AutonomyMode;
+    if (mode === 'paused') return paused;
+    // Grey means nothing is being withheld, which is true of exactly one mode.
+    return { kind: mode === 'autonomous' ? 'dim' : 'warn', text: MODE_STYLE[mode].label };
+  }
+
+  if (a?.paused === true) return paused;
+  if (a?.paused === false) return { kind: 'dim', text: 'not paused' };
+  return { kind: 'dim', text: 'unreadable' };
+}
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
@@ -184,7 +229,7 @@ export default function ConsoleScreen() {
 
     emit('dim', '');
 
-    const s = settings as { llm?: { current_model?: string }; autonomy?: { paused?: boolean } } | null;
+    const s = settings as { llm?: { current_model?: string }; autonomy?: ConsoleAutonomy } | null;
     const v = voice as { register?: string } | null;
     const pending = Array.isArray(approvals) ? approvals.length : null;
 
@@ -192,14 +237,12 @@ export default function ConsoleScreen() {
     facts.push(['dim', `${pad('model', 14)}${s?.llm?.current_model ?? 'unreadable'}`]);
     facts.push(['dim', `${pad('register', 14)}${v?.register ?? 'unreadable'}`]);
 
-    // Autonomy paused is the single most demo-relevant piece of state on the box:
-    // she will answer chat perfectly while doing nothing on her own, and that
-    // looks identical to working. It gets a colour rather than a grey line.
-    if (s?.autonomy?.paused === true) {
-      facts.push(['warn', `${pad('autonomy', 14)}PAUSED — her scheduled work is not running`]);
-    } else if (s?.autonomy?.paused === false) {
-      facts.push(['dim', `${pad('autonomy', 14)}running`]);
-    }
+    // How much rope she has is the single most demo-relevant piece of state on
+    // the box: constrained, she answers chat perfectly while doing nothing on her
+    // own, and that looks identical to working. Anything short of autonomous gets
+    // a colour rather than a grey line.
+    const autonomy = autonomyStatus(s?.autonomy);
+    facts.push([autonomy.kind, `${pad('autonomy', 14)}${autonomy.text}`]);
 
     if (pending === null) {
       facts.push(['dim', `${pad('approvals', 14)}unreadable`]);
@@ -282,12 +325,13 @@ export default function ConsoleScreen() {
           apiFetch('/settings/voice').then(r => r.ok ? r.json() : null).catch(() => null),
           apiFetch('/approvals').then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
-        const s = sr as { llm?: { current_model?: string }; autonomy?: { paused?: boolean } } | null;
+        const s = sr as { llm?: { current_model?: string }; autonomy?: ConsoleAutonomy } | null;
         const v = vr as { register?: string; voiceprint?: { drift?: number; breaches?: string[] } } | null;
         emit('sys', 'Raven');
         emit('dim', `  ${pad('model', 14)}${s?.llm?.current_model ?? 'unreadable'}`);
         emit('dim', `  ${pad('register', 14)}${v?.register ?? 'unreadable'}`);
-        emit('dim', `  ${pad('autonomy', 14)}${s?.autonomy?.paused === true ? 'paused' : s?.autonomy?.paused === false ? 'running' : 'unreadable'}`);
+        const autonomy = autonomyStatus(s?.autonomy);
+        emit(autonomy.kind, `  ${pad('autonomy', 14)}${autonomy.text}`);
         emit('dim', `  ${pad('approvals', 14)}${Array.isArray(ar) ? `${ar.length} pending` : 'unreadable'}`);
         emit('dim', `  ${pad('drift', 14)}${typeof v?.voiceprint?.drift === 'number' ? v.voiceprint.drift : '—'}`);
         for (const b of v?.voiceprint?.breaches ?? []) emit('err', `  ! ${b}`);
