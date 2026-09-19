@@ -308,7 +308,7 @@ export default function SettingsScreen() {
   if (loading) return <div className="empty-state">Loading…</div>;
   if (!data) {
     return (
-      <div style={{ paddingBottom: 48 }}>
+      <div>
         <Note tone="warn">
           Could not load settings. {flash?.text}
         </Note>
@@ -319,7 +319,7 @@ export default function SettingsScreen() {
   const { google, mailbox, feeds, llm, autonomy, memory } = data;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 56, maxWidth: 820 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {flash && (
         <Note tone={flash.tone}>{flash.text}</Note>
       )}

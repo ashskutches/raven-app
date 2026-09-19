@@ -100,7 +100,7 @@ export default function BlockagesScreen() {
   if (loading) return <div className="empty-state">Loading…</div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 48 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {[{ id: '', label: `All (${items.length})` },
           ...Object.entries(counts).map(([t, n]) => ({ id: t, label: `${TYPE_META[t]?.label ?? t} (${n})` }))
