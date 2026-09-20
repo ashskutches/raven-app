@@ -69,7 +69,12 @@ interface GuildMember {
   username: string;
   display_name: string;
   avatar_url: string | null;
+  /** Which servers this member was found in. Only set in the all-servers view. */
+  guilds?: Array<{ id: string; name: string }>;
 }
+
+/** The synthetic "every server" row at the top of the picker. */
+const ALL_GUILDS: Guild = { id: '__all__', name: 'All servers', icon_url: null };
 
 /* ── Constants ──────────────────────────────────────────────── */
 
@@ -634,9 +639,10 @@ function PersonCard({
 
 /* ── Guild Picker Modal ────────────────────────────────────────── */
 
-function GuildPickerModal({ onClose, onImport }: {
+function GuildPickerModal({ onClose, onImport, existingIds }: {
   onClose: () => void;
   onImport: (member: GuildMember) => Promise<void>;
+  existingIds: Set<string>;
 }) {
   const [step, setStep]                     = useState<'guild' | 'members'>('guild');
   const [guilds, setGuilds]                 = useState<Guild[]>([]);
@@ -647,6 +653,7 @@ function GuildPickerModal({ onClose, onImport }: {
   const [importing, setImporting]           = useState<string | null>(null);
   const [search, setSearch]                 = useState('');
   const [error, setError]                   = useState('');
+  const [warning, setWarning]               = useState('');
 
   useEffect(() => {
     apiFetch('/people/discord/guilds')
@@ -659,10 +666,24 @@ function GuildPickerModal({ onClose, onImport }: {
     setSelectedGuild(guild);
     setLoadingMembers(true);
     setStep('members');
+    setError(''); setWarning('');
     try {
-      const r = await apiFetch(`/people/discord/guilds/${guild.id}/members`);
-      const data = await r.json() as GuildMember[];
-      setMembers(data);
+      if (guild.id === ALL_GUILDS.id) {
+        // One list across every server Raven is in, deduped by Discord id.
+        const r = await apiFetch('/people/discord/members');
+        const data = await r.json() as {
+          members: GuildMember[];
+          failed_guilds?: Array<{ name: string }>;
+        };
+        setMembers(data.members ?? []);
+        if (data.failed_guilds?.length) {
+          setWarning(`Could not read ${data.failed_guilds.map(f => f.name).join(', ')} — those members are missing from this list.`);
+        }
+      } else {
+        const r = await apiFetch(`/people/discord/guilds/${guild.id}/members`);
+        const data = await r.json() as GuildMember[];
+        setMembers(data);
+      }
     } catch { setError('Could not load members.'); }
     setLoadingMembers(false);
   }
@@ -684,7 +705,9 @@ function GuildPickerModal({ onClose, onImport }: {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <h3 style={{ color: '#fff', fontWeight: 700, fontSize: 17, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Server size={16} style={{ color: '#7289da' }} />
-            {step === 'guild' ? 'Pick a Server' : selectedGuild?.name}
+            {step === 'guild'
+              ? 'Pick a Server'
+              : `${selectedGuild?.name}${loadingMembers ? '' : ` · ${members.length}`}`}
           </h3>
           <div style={{ display: 'flex', gap: 8 }}>
             {step === 'members' && (
@@ -695,11 +718,22 @@ function GuildPickerModal({ onClose, onImport }: {
         </div>
 
         {error && <div style={{ color: '#f87171', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+        {warning && <div style={{ color: 'var(--color-gold)', fontSize: 12, marginBottom: 12, lineHeight: 1.45 }}>{warning}</div>}
 
         {step === 'guild' && (
           loadingGuilds ? <div style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 30 }}>Loading servers...</div>
           : guilds.length === 0 ? <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: 30 }}>No servers found.</div>
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button onClick={() => loadMembers(ALL_GUILDS)}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'rgba(88,101,242,0.12)', border: '1px solid rgba(88,101,242,0.35)', borderRadius: 12, cursor: 'pointer', textAlign: 'left' }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(88,101,242,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Users size={15} style={{ color: '#7289da' }} /></div>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', color: '#fff', fontWeight: 600, fontSize: 14 }}>{ALL_GUILDS.name}</span>
+                  <span style={{ display: 'block', color: 'var(--color-text-subtle)', fontSize: 11 }}>
+                    Everyone across {guilds.length} server{guilds.length === 1 ? '' : 's'}, deduped
+                  </span>
+                </span>
+              </button>
               {guilds.map(g => (
                 <button key={g.id} onClick={() => loadMembers(g)}
                   style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, cursor: 'pointer', textAlign: 'left' }}>
@@ -728,15 +762,24 @@ function GuildPickerModal({ onClose, onImport }: {
                     }
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ color: '#fff', fontWeight: 500, fontSize: 13 }}>{m.display_name}</div>
-                      <div style={{ color: 'var(--color-text-subtle)', fontSize: 11 }}>@{m.username}</div>
+                      <div style={{ color: 'var(--color-text-subtle)', fontSize: 11 }}>
+                        @{m.username}
+                        {m.guilds?.length ? ` · ${m.guilds.map(g => g.name).join(' · ')}` : ''}
+                      </div>
                     </div>
-                    <button
-                      onClick={async () => { setImporting(m.discord_user_id); await onImport(m); setImporting(null); }}
-                      disabled={importing === m.discord_user_id}
-                      style={{ padding: '5px 12px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      {importing === m.discord_user_id ? '...' : 'Add'}
-                    </button>
+                    {/* An Add button for someone already in the CRM did nothing at all —
+                        onImport skips them — which reads as a broken button. */}
+                    {existingIds.has(m.discord_user_id) ? (
+                      <span style={{ padding: '5px 12px', color: 'var(--color-emerald)', fontSize: 12, fontWeight: 600 }}>Added</span>
+                    ) : (
+                      <button
+                        onClick={async () => { setImporting(m.discord_user_id); await onImport(m); setImporting(null); }}
+                        disabled={importing === m.discord_user_id}
+                        style={{ padding: '5px 12px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        {importing === m.discord_user_id ? '...' : 'Add'}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -942,6 +985,7 @@ export default function PeopleScreen() {
         {showGuildPicker && (
           <GuildPickerModal
             onClose={() => setShowGuildPicker(false)}
+            existingIds={new Set(people.map(p => p.discord_user_id).filter(Boolean) as string[])}
             onImport={async (member) => {
               // Upsert into people: if discord_user_id already exists, skip; else create
               const existing = people.find(p => p.discord_user_id === member.discord_user_id);
