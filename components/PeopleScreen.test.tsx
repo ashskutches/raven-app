@@ -88,3 +88,39 @@ describe('GuildPickerModal — all servers', () => {
     expect(screen.getByText('Could not load members.')).toBeTruthy();
   });
 });
+
+describe('GuildPickerModal — switching servers after a success', () => {
+  beforeEach(() => { vi.stubGlobal('confirm', () => true); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it('drops the previous server\'s members when the next request fails', async () => {
+    stubApi({
+      // Raven HQ answers fine...
+      '/api/proxy/people/discord/guilds/1/members': () => json([
+        { discord_user_id: '9', username: 'kestrel', display_name: 'Kestrel', avatar_url: null },
+      ]),
+      // ...then the every-server walk falls over.
+      '/api/proxy/people/discord/members': () =>
+        json({ error: 'Discord API error: 429' }, 500),
+    });
+
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+
+    fireEvent.click(screen.getByText('Raven HQ'));
+    await settle();
+    expect(screen.getByText('Kestrel')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('← Back'));
+    fireEvent.click(screen.getByText('All servers'));
+    await settle();
+
+    expect(screen.getByText('Could not load members.')).toBeTruthy();
+    // The failed list must not be Raven HQ's list wearing an "All servers"
+    // label — nor its headcount presented as an every-server total.
+    expect(screen.queryByText('Kestrel')).toBeNull();
+    expect(screen.getByRole('heading', { level: 3 }).textContent).not.toContain('· 1');
+  });
+});

@@ -667,6 +667,10 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
     setLoadingMembers(true);
     setStep('members');
     setError(''); setWarning('');
+    // The header now labels this list with the guild we just switched to and
+    // tallies it. Keeping the old guild's members past that switch would make
+    // a failed load read as "All servers — 119 people" while showing one server's.
+    setMembers([]);
     try {
       if (guild.id === ALL_GUILDS.id) {
         // One list across every server Raven is in, deduped by Discord id.
