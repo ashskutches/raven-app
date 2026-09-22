@@ -588,11 +588,8 @@ export default function ConsoleScreen() {
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') { e.preventDefault(); void submit(); return; }
 
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      abortRef.current?.abort();
-      return;
-    }
+    // Escape is not handled here — see the document listener below for why it
+    // cannot be.
 
     // Shell history. Only reaches for it when there is one, so an empty console
     // does not swallow the arrow keys.
@@ -608,6 +605,32 @@ export default function ConsoleScreen() {
       setInput(histPos.current < 0 ? '' : historyRef.current[histPos.current] ?? '');
     }
   }, [submit]);
+
+  /**
+   * Escape has to be heard at the document, not at the input.
+   *
+   * The only window in which an abort means anything is while a turn is
+   * streaming — and that is exactly the window in which the input carries
+   * `disabled`. The browser blurs a disabled control and routes the keystroke to
+   * `document.body`, which is an ancestor of this screen rather than a
+   * descendant, so neither `onKeyDown` on the input nor a handler on any wrapper
+   * inside `.console` ever sees it. Bound there, the branch was unreachable for
+   * the entire time the affordance was being advertised: the placeholder reads
+   * "working — Esc to abort" and `/help` says "Esc aborts a running turn", and
+   * both were false.
+   *
+   * Only while busy, so an idle console still leaves Escape to the browser.
+   */
+  useEffect(() => {
+    if (!busy) return;
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      abortRef.current?.abort();
+    };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [busy]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
