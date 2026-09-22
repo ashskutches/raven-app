@@ -657,8 +657,13 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
 
   useEffect(() => {
     apiFetch('/people/discord/guilds')
-      .then(r => r.json() as Promise<Guild[]>)
-      .then(data => { setGuilds(data); setLoadingGuilds(false); })
+      .then(r => {
+        // Same non-2xx-with-a-parseable-body shape guarded in loadMembers: without
+        // this the {error} object itself becomes `guilds`, and guilds.map throws.
+        if (!r.ok) throw new Error(`guilds request failed: ${r.status}`);
+        return r.json() as Promise<Guild[]>;
+      })
+      .then(data => { setGuilds(Array.isArray(data) ? data : []); setLoadingGuilds(false); })
       .catch(() => { setError('Could not load Discord servers.'); setLoadingGuilds(false); });
   }, []);
 
@@ -671,14 +676,18 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
     // tallies it. Keeping the old guild's members past that switch would make
     // a failed load read as "All servers — 119 people" while showing one server's.
     setMembers([]);
+    const everyServer = guild.id === ALL_GUILDS.id;
     try {
-      if (guild.id === ALL_GUILDS.id) {
+      const r = await apiFetch(everyServer
         // One list across every server Raven is in, deduped by Discord id.
-        const r = await apiFetch('/people/discord/members');
-        // A refusal here still parses: raven-api answers 503/500 with a JSON
-        // {error} body, so without this the destructure yields no members and
-        // `?? []` reports "nobody to import" for "Raven could not look".
-        if (!r.ok) throw new Error(`members request failed: ${r.status}`);
+        ? '/people/discord/members'
+        : `/people/discord/guilds/${guild.id}/members`);
+      // A refusal here still parses: raven-api answers 503/500 with a JSON
+      // {error} body. Both branches need this guard, not just the walk — for a
+      // single server the error object lands in `members` whole, and the next
+      // render throws members.filter out of the component body.
+      if (!r.ok) throw new Error(`members request failed: ${r.status}`);
+      if (everyServer) {
         const data = await r.json() as {
           members: GuildMember[];
           failed_guilds?: Array<{ name: string }>;
@@ -688,9 +697,8 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
           setWarning(`Could not read ${data.failed_guilds.map(f => f.name).join(', ')} — those members are missing from this list.`);
         }
       } else {
-        const r = await apiFetch(`/people/discord/guilds/${guild.id}/members`);
         const data = await r.json() as GuildMember[];
-        setMembers(data);
+        setMembers(Array.isArray(data) ? data : []);
       }
     } catch { setError('Could not load members.'); }
     setLoadingMembers(false);

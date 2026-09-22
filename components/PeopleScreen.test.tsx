@@ -124,3 +124,49 @@ describe('GuildPickerModal — switching servers after a success', () => {
     expect(screen.getByRole('heading', { level: 3 }).textContent).not.toContain('· 1');
   });
 });
+
+describe('GuildPickerModal — one server', () => {
+  beforeEach(() => { vi.stubGlobal('confirm', () => true); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it('says so when one server refuses, instead of crashing the modal', async () => {
+    // The same 503-with-a-JSON-body the all-servers branch was hardened
+    // against. Un-guarded, `r.json()` resolves to {error}, the catch never
+    // fires, and `members.filter` throws out of the component body — the
+    // modal and the screen behind it unmount to a blank region.
+    stubApi({
+      '/api/proxy/people/discord/guilds/1/members': () =>
+        json({ error: 'Discord bot token not configured' }, 503),
+    });
+
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+    fireEvent.click(screen.getByText('Raven HQ'));
+    await settle();
+
+    expect(screen.getByText('Could not load members.')).toBeTruthy();
+  });
+});
+
+describe('GuildPickerModal — server list', () => {
+  beforeEach(() => { vi.stubGlobal('confirm', () => true); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it('says so when the server list refuses, instead of crashing the modal', async () => {
+    // Same shape one level up: a non-ok JSON body becomes `guilds`, and
+    // `guilds.map` throws where the picker should have said it could not look.
+    stubApi({
+      '/api/proxy/people/discord/guilds': () =>
+        json({ error: 'Discord bot token not configured' }, 503),
+    });
+
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+
+    expect(screen.getByText('Could not load Discord servers.')).toBeTruthy();
+  });
+});
