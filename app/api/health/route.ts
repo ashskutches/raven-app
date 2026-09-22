@@ -23,6 +23,33 @@ import { NextResponse } from 'next/server';
 /** Never prerendered or cached — a cached health response is not a health check. */
 export const dynamic = 'force-dynamic';
 
+/**
+ * Which build is answering.
+ *
+ * A liveness probe that only says "ok" cannot distinguish a successful deploy
+ * from the PREVIOUS build still serving -- the old container answers 200 just
+ * as cheerfully. So a deploy could silently not ship and every signal would
+ * look healthy, which is this repo's documented failure mode: deploys here are
+ * manual (`railway up`), and one that never ran leaves no trace anywhere else.
+ *
+ * claude-station's bin/ship.mjs verifies a deploy by polling until the commit
+ * it pushed is the commit being served. Without this field that check can never
+ * succeed, so it would report NOT VERIFIED on a perfectly good deploy and file
+ * a job about it -- a check that cannot pass, which is no better than one that
+ * cannot fail. raven-api's /health has reported `commit` for exactly this
+ * reason.
+ *
+ * RAILWAY_GIT_COMMIT_SHA is injected by Railway at build time. Locally there is
+ * no such variable, so it reports 'dev' rather than pretending to know.
+ */
+const COMMIT = (process.env.RAILWAY_GIT_COMMIT_SHA ?? 'dev').slice(0, 7);
+const BRANCH = process.env.RAILWAY_GIT_BRANCH ?? 'dev';
+
 export function GET() {
-  return NextResponse.json({ status: 'ok', name: 'raven-app' });
+  return NextResponse.json({
+    status: 'ok',
+    name: 'raven-app',
+    commit: COMMIT,
+    branch: BRANCH,
+  });
 }
