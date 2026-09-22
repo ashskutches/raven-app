@@ -667,10 +667,18 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
     setLoadingMembers(true);
     setStep('members');
     setError(''); setWarning('');
+    // The header now labels this list with the guild we just switched to and
+    // tallies it. Keeping the old guild's members past that switch would make
+    // a failed load read as "All servers — 119 people" while showing one server's.
+    setMembers([]);
     try {
       if (guild.id === ALL_GUILDS.id) {
         // One list across every server Raven is in, deduped by Discord id.
         const r = await apiFetch('/people/discord/members');
+        // A refusal here still parses: raven-api answers 503/500 with a JSON
+        // {error} body, so without this the destructure yields no members and
+        // `?? []` reports "nobody to import" for "Raven could not look".
+        if (!r.ok) throw new Error(`members request failed: ${r.status}`);
         const data = await r.json() as {
           members: GuildMember[];
           failed_guilds?: Array<{ name: string }>;
