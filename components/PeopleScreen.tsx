@@ -12,7 +12,7 @@
  *  - Privacy-first: Raven never shares your data without authorization
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Plus, Trash2, Edit3, Check, X, Cake,
@@ -662,7 +662,15 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
       .catch(() => { setError('Could not load Discord servers.'); setLoadingGuilds(false); });
   }, []);
 
+  /* Only the newest load may write state. '← Back' and the server buttons
+     behind it leave an in-flight request running, and the every-server walk
+     takes seconds where one guild takes milliseconds — so an abandoned walk
+     can land last and repaint its members, count and errors under whichever
+     server the picker has moved on to. */
+  const requestSeq = useRef(0);
+
   async function loadMembers(guild: Guild) {
+    const seq = ++requestSeq.current;
     setSelectedGuild(guild);
     setLoadingMembers(true);
     setStep('members');
@@ -683,6 +691,7 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
           members: GuildMember[];
           failed_guilds?: Array<{ name: string }>;
         };
+        if (seq !== requestSeq.current) return;
         setMembers(data.members ?? []);
         if (data.failed_guilds?.length) {
           setWarning(`Could not read ${data.failed_guilds.map(f => f.name).join(', ')} — those members are missing from this list.`);
@@ -690,9 +699,14 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
       } else {
         const r = await apiFetch(`/people/discord/guilds/${guild.id}/members`);
         const data = await r.json() as GuildMember[];
+        if (seq !== requestSeq.current) return;
         setMembers(data);
       }
-    } catch { setError('Could not load members.'); }
+    } catch {
+      if (seq !== requestSeq.current) return;
+      setError('Could not load members.');
+    }
+    if (seq !== requestSeq.current) return;
     setLoadingMembers(false);
   }
 

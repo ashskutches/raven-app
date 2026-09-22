@@ -15,8 +15,9 @@ function json(body: unknown, status = 200) {
 }
 
 /** Route by proxied path, so each test only has to name what it changes. */
-function stubApi(overrides: Record<string, () => Response>) {
-  const base: Record<string, () => Response> = {
+type Route = () => Response | Promise<Response>;
+function stubApi(overrides: Record<string, Route>) {
+  const base: Record<string, Route> = {
     '/api/proxy/people': () => json([]),
     '/api/proxy/people/discord/guilds': () => json([{ id: '1', name: 'Raven HQ', icon_url: null }]),
     '/api/proxy/people/discord/members': () => json({ members: [] }),
@@ -122,5 +123,91 @@ describe('GuildPickerModal — switching servers after a success', () => {
     // label — nor its headcount presented as an every-server total.
     expect(screen.queryByText('Kestrel')).toBeNull();
     expect(screen.getByRole('heading', { level: 3 }).textContent).not.toContain('· 1');
+  });
+});
+
+describe('GuildPickerModal — switching servers while a load is still running', () => {
+  beforeEach(() => { vi.stubGlobal('confirm', () => true); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it('ignores an abandoned every-server walk that lands after a single server', async () => {
+    // raven-api walks every guild sequentially for the all-servers list, so it
+    // can take seconds while one guild answers immediately. '← Back' only flips
+    // `step` — the abandoned walk is still in flight, and whichever request
+    // resolves last used to win regardless of which server is on screen.
+    let releaseWalk: () => void = () => {};
+    const walkLanded = new Promise<void>(resolve => { releaseWalk = resolve; });
+
+    stubApi({
+      // Raven HQ: one member, answers at once.
+      '/api/proxy/people/discord/guilds/1/members': () => json([
+        { discord_user_id: '9', username: 'kestrel', display_name: 'Kestrel', avatar_url: null },
+      ]),
+      // Every server: two members, but only once the test lets it through.
+      '/api/proxy/people/discord/members': async () => {
+        await walkLanded;
+        return json({
+          members: [
+            { discord_user_id: '9', username: 'kestrel', display_name: 'Kestrel', avatar_url: null },
+            { discord_user_id: '7', username: 'magpie', display_name: 'Magpie', avatar_url: null },
+          ],
+        });
+      },
+    });
+
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+
+    fireEvent.click(screen.getByText('All servers'));
+    await settle();
+    fireEvent.click(screen.getByText('← Back'));
+    fireEvent.click(screen.getByText('Raven HQ'));
+    await settle();
+
+    expect(screen.getByRole('heading', { level: 3 }).textContent).toContain('Raven HQ · 1');
+
+    // The abandoned walk finally comes back.
+    releaseWalk();
+    await settle();
+
+    // It must not repaint the list under the Raven HQ label.
+    expect(screen.getByRole('heading', { level: 3 }).textContent).toContain('Raven HQ · 1');
+    expect(screen.queryByText('Magpie')).toBeNull();
+  });
+
+  it('does not let an abandoned walk’s failure blame the server now on screen', async () => {
+    let releaseWalk: () => void = () => {};
+    const walkLanded = new Promise<void>(resolve => { releaseWalk = resolve; });
+
+    stubApi({
+      '/api/proxy/people/discord/guilds/1/members': () => json([
+        { discord_user_id: '9', username: 'kestrel', display_name: 'Kestrel', avatar_url: null },
+      ]),
+      '/api/proxy/people/discord/members': async () => {
+        await walkLanded;
+        return json({ error: 'Discord API error: 429' }, 500);
+      },
+    });
+
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+
+    fireEvent.click(screen.getByText('All servers'));
+    await settle();
+    fireEvent.click(screen.getByText('← Back'));
+    fireEvent.click(screen.getByText('Raven HQ'));
+    await settle();
+
+    releaseWalk();
+    await settle();
+
+    // Raven HQ loaded fine. The all-servers failure belongs to a list nobody
+    // is looking at, so it must not appear over a list that is right there.
+    expect(screen.queryByText('Could not load members.')).toBeNull();
+    expect(screen.getByText('Kestrel')).toBeTruthy();
   });
 });
