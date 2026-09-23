@@ -226,7 +226,13 @@ export default function ConsoleScreen() {
 
   // ── Commands ──────────────────────────────────────────────────────────────
 
-  const runCommand = useCallback(async (raw: string): Promise<void> => {
+  /**
+   * `signal` is not decoration: every read here is a call to a raven-api that can
+   * stop answering, and the console disables its input for the whole command. It
+   * is threaded through each fetch so Escape cancels the request itself rather
+   * than only unsticking the UI on top of it.
+   */
+  const runCommand = useCallback(async (raw: string, signal: AbortSignal): Promise<void> => {
     const [name, ...rest] = raw.slice(1).trim().split(/\s+/);
     const arg = rest.join(' ');
 
@@ -264,13 +270,16 @@ export default function ConsoleScreen() {
 
       case 'api': {
         try {
-          const r = await fetch('/api/target');
+          const r = await fetch('/api/target', { signal });
           const t = await r.json() as { upstream?: string; authenticated?: boolean; local?: boolean };
           emit('sys', `upstream  ${t.upstream ?? 'unknown'}`);
           emit(t.local ? 'warn' : 'dim', t.local ? 'This is a LOCAL raven-api.' : 'This is the deployed raven-api.');
           emit(t.authenticated ? 'dim' : 'warn',
             t.authenticated ? 'Bearer token configured.' : 'No RAVEN_API_SECRET set — every call will 401.');
         } catch (err) {
+          // An abort is not a failure to read the target; it is Ash saying stop.
+          // Let submit() report it as one.
+          if ((err as Error).name === 'AbortError') throw err;
           emit('err', `Could not read the proxy target: ${(err as Error).message}`);
         }
         return;
@@ -278,10 +287,14 @@ export default function ConsoleScreen() {
 
       case 'whoami': {
         const [sr, vr, ar] = await Promise.all([
-          apiFetch('/settings').then(r => r.ok ? r.json() : null).catch(() => null),
-          apiFetch('/settings/voice').then(r => r.ok ? r.json() : null).catch(() => null),
-          apiFetch('/approvals').then(r => r.ok ? r.json() : null).catch(() => null),
+          apiFetch('/settings', { signal }).then(r => r.ok ? r.json() : null).catch(() => null),
+          apiFetch('/settings/voice', { signal }).then(r => r.ok ? r.json() : null).catch(() => null),
+          apiFetch('/approvals', { signal }).then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
+        // These three swallow their own errors, so an abort would otherwise be
+        // reported as four `unreadable` rows — a claim about her, when in fact
+        // the read was cancelled.
+        if (signal.aborted) { emit('dim', '^C  aborted'); return; }
         const s = sr as { llm?: { current_model?: string }; autonomy?: { paused?: boolean } } | null;
         const v = vr as { register?: string; voiceprint?: { drift?: number; breaches?: string[] } } | null;
         emit('sys', 'Raven');
@@ -296,7 +309,7 @@ export default function ConsoleScreen() {
 
       case 'register': {
         if (!arg) {
-          const r = await apiFetch('/settings/voice');
+          const r = await apiFetch('/settings/voice', { signal });
           if (!r.ok) { emit('err', `Could not read the register (HTTP ${r.status})`); return; }
           const v = await r.json() as { register: string; options: Array<{ id: string; note: string }> };
           emit('sys', `register  ${v.register}`);
@@ -308,6 +321,7 @@ export default function ConsoleScreen() {
         const r = await apiFetch('/settings/voice', {
           method: 'PATCH',
           body: JSON.stringify({ register: arg }),
+          signal,
         });
         const body = await r.json() as {
           register?: string; previous?: string; error?: string;
@@ -328,7 +342,7 @@ export default function ConsoleScreen() {
       }
 
       case 'voiceprint': {
-        const r = await apiFetch('/settings/voice');
+        const r = await apiFetch('/settings/voice', { signal });
         if (!r.ok) { emit('err', `Could not read the voiceprint (HTTP ${r.status})`); return; }
         const v = await r.json() as {
           register: string;
@@ -353,7 +367,7 @@ export default function ConsoleScreen() {
       }
 
       case 'work': {
-        const r = await apiFetch('/tasks?state=inbox,next,doing,waiting,blocked');
+        const r = await apiFetch('/tasks?state=inbox,next,doing,waiting,blocked', { signal });
         if (!r.ok) { emit('err', `Could not read the queue (HTTP ${r.status})`); return; }
         const body = await r.json() as unknown;
         const tasks = (Array.isArray(body) ? body : (body as { items?: unknown[] }).items ?? []) as
@@ -368,7 +382,7 @@ export default function ConsoleScreen() {
       }
 
       case 'approvals': {
-        const r = await apiFetch('/approvals');
+        const r = await apiFetch('/approvals', { signal });
         if (!r.ok) { emit('err', `Could not read the queue (HTTP ${r.status})`); return; }
         const items = await r.json() as Array<{
           action_type: string; summary: string | null; amount_usd: number | null; expires_at: string;
@@ -386,7 +400,7 @@ export default function ConsoleScreen() {
       }
 
       case 'model': {
-        const r = await apiFetch('/settings');
+        const r = await apiFetch('/settings', { signal });
         if (!r.ok) { emit('err', `Could not read settings (HTTP ${r.status})`); return; }
         const s = await r.json() as {
           llm: { current_model: string; options: Array<{ id: string; label?: string }>; usage?: Record<string, unknown> };
@@ -577,9 +591,19 @@ export default function ConsoleScreen() {
 
     if (text.startsWith('/')) {
       setBusy(true);
-      try { await runCommand(text); }
-      catch (err) { emit('err', (err as Error).message); }
-      finally { setBusy(false); emit('dim', ''); }
+      // The controller belongs here and not only in send(): a command disables the
+      // input and advertises "Esc to abort" exactly like a chat turn does, and
+      // commands are the likelier of the two to hang, being plain reads of a
+      // raven-api that may have gone quiet. Built only in send(), abortRef.current
+      // was null for every command, so the Escape listener fired, swallowed the
+      // keystroke, and aborted nothing.
+      abortRef.current = new AbortController();
+      try { await runCommand(text, abortRef.current.signal); }
+      catch (err) {
+        if ((err as Error).name === 'AbortError') emit('dim', '^C  aborted');
+        else emit('err', (err as Error).message);
+      }
+      finally { setBusy(false); abortRef.current = null; emit('dim', ''); }
       return;
     }
     await send(text);
