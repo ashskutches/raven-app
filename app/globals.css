@@ -106,6 +106,14 @@ body {
      tab bar — sits under the fold. Every screen here scrolls internally, so the
      page never scrolls and the toolbar never collapses to reveal it. */
   height: 100dvh;
+  /* viewport-fit=cover (see app/layout.tsx) hands the page the whole display,
+     cutout included. In landscape on a notched iPhone the window is 852px —
+     wider than the 720px breakpoint, so this is the rail — and the sensor
+     housing covers the first ~59px, which is the nav icons and half their
+     labels. Inset the shell so the housing sits over the page background
+     instead. Zero on every screen without a cutout. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   overflow: hidden;
 }
 
