@@ -89,6 +89,49 @@ describe('GuildPickerModal — all servers', () => {
   });
 });
 
+describe('GuildPickerModal — one server', () => {
+  beforeEach(() => { vi.stubGlobal('confirm', () => true); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  /** Open the picker and click through to a single named server. */
+  async function openGuild(name: string) {
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+    fireEvent.click(screen.getByText(name));
+    await settle();
+  }
+
+  it('shows the members when the request succeeds', async () => {
+    stubApi({
+      '/api/proxy/people/discord/guilds/1/members': () => json([
+        { discord_user_id: '9', username: 'kestrel', display_name: 'Kestrel', avatar_url: null },
+      ]),
+    });
+
+    await openGuild('Raven HQ');
+
+    expect(screen.getByText('Kestrel')).toBeTruthy();
+    expect(screen.queryByText('Could not load members.')).toBeNull();
+  });
+
+  it('says so when the single-server request refuses', async () => {
+    // The per-guild route expects an array. A refusal is a JSON {error} object
+    // with a non-2xx status, which parses fine — so an unchecked r.json() put
+    // a non-array into `members` and the next render threw on .filter().
+    stubApi({
+      '/api/proxy/people/discord/guilds/1/members': () =>
+        json({ error: 'Discord API error: 500' }, 500),
+    });
+
+    await openGuild('Raven HQ');
+
+    expect(screen.getByText('Could not load members.')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 3 }).textContent).toContain('· 0');
+  });
+});
+
 describe('GuildPickerModal — switching servers after a success', () => {
   beforeEach(() => { vi.stubGlobal('confirm', () => true); });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
