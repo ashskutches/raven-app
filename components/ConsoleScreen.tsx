@@ -229,8 +229,9 @@ export default function ConsoleScreen() {
   /**
    * `signal` is not decoration: every read here is a call to a raven-api that can
    * stop answering, and the console disables its input for the whole command. It
-   * is threaded through each fetch so Escape cancels the request itself rather
-   * than only unsticking the UI on top of it.
+   * is threaded through each read so Escape cancels the request itself rather
+   * than only unsticking the UI on top of it. The one fetch it is deliberately
+   * withheld from is `/register <arg>`'s PATCH — see the note there.
    */
   const runCommand = useCallback(async (raw: string, signal: AbortSignal): Promise<void> => {
     const [name, ...rest] = raw.slice(1).trim().split(/\s+/);
@@ -318,10 +319,18 @@ export default function ConsoleScreen() {
           }
           return;
         }
+        // Deliberately no `signal`. Every other read here is cancellable because
+        // cancelling one costs nothing; this is the console's one write, and it
+        // cannot be taken back. The proxy forwards method, headers and body and
+        // not `req.signal`, so aborting the browser leg never reaches raven-api —
+        // and a forwarded signal would only drop the connection, not un-apply a
+        // change already made. Wired up, Esc bought a '^C  aborted' line over a
+        // register that had in fact switched, and skipped the identity-changed
+        // dispatch below, so the topbar kept showing the old one. Better to keep
+        // waiting for the real answer than to report an outcome it cannot know.
         const r = await apiFetch('/settings/voice', {
           method: 'PATCH',
           body: JSON.stringify({ register: arg }),
-          signal,
         });
         const body = await r.json() as {
           register?: string; previous?: string; error?: string;
