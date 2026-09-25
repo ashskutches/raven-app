@@ -225,20 +225,11 @@ export default function ScreenPage() {
                 )}
                 <Icon size={17} style={{ position: 'relative' }} />
                 <span style={{ position: 'relative' }}>{label}</span>
+                {/* Styled from globals.css rather than inline: the mobile tab bar
+                    stacks the icon over the label, where "at the end of the row"
+                    is not a place, and re-pins this to the icon's corner. */}
                 {id === 'approvals' && (vitals.pending ?? 0) > 0 && (
-                  <span style={{
-                    position: 'relative',
-                    marginLeft: 'auto',
-                    background: 'rgba(245,158,11,0.9)',
-                    color: '#111',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    padding: '1px 6px',
-                    borderRadius: '100px',
-                    lineHeight: '16px',
-                    minWidth: '18px',
-                    textAlign: 'center',
-                  }}>
+                  <span className="nav-badge">
                     {(vitals.pending ?? 0) > 99 ? '99+' : vitals.pending}
                   </span>
                 )}
@@ -279,17 +270,20 @@ export default function ScreenPage() {
                   ) : (
                     <>
                       Raven is online
+                      {/* Model and register drop out below 720px — three pills and a
+                          title do not fit one phone line, and these two are the only
+                          parts that are reference rather than state. */}
                       {vitals.model && (
-                        <>
+                        <span className="topbar-status-detail">
                           <span className="topbar-status-sep">·</span>
                           {vitals.model}
-                        </>
+                        </span>
                       )}
                       {vitals.register && (
-                        <>
+                        <span className="topbar-status-detail">
                           <span className="topbar-status-sep">·</span>
                           {vitals.register}
-                        </>
+                        </span>
                       )}
                       {(vitals.pending ?? 0) > 0 && (
                         <>

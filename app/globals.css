@@ -101,6 +101,19 @@ body {
 .app-layout {
   display: flex;
   height: 100vh;
+  /* Mobile browsers count their own collapsing toolbar as viewport, so 100vh is
+     taller than the screen and the bottom of the shell — which on a phone is the
+     tab bar — sits under the fold. Every screen here scrolls internally, so the
+     page never scrolls and the toolbar never collapses to reveal it. */
+  height: 100dvh;
+  /* viewport-fit=cover (see app/layout.tsx) hands the page the whole display,
+     cutout included. In landscape on a notched iPhone the window is 852px —
+     wider than the 720px breakpoint, so this is the rail — and the sensor
+     housing covers the first ~59px, which is the nav icons and half their
+     labels. Inset the shell so the housing sits over the page background
+     instead. Zero on every screen without a cutout. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   overflow: hidden;
 }
 
@@ -181,6 +194,22 @@ body {
 
 .nav-item svg { flex-shrink: 0; }
 
+/* Sits at the end of the row in the rail; the mobile tab bar re-pins it to the
+   icon's corner, which is why it is a class and not a style attribute. */
+.nav-badge {
+  position: relative;
+  margin-left: auto;
+  background: rgba(245,158,11,0.9);
+  color: #111;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 100px;
+  line-height: 16px;
+  min-width: 18px;
+  text-align: center;
+}
+
 /* ── Main content ──────────────────────────────────────────── */
 .main-content {
   flex: 1;
@@ -255,10 +284,6 @@ body {
   font-weight: 700;
   flex: 1;
   letter-spacing: -0.2px;
-}
-
-@media (max-width: 720px) {
-  .topbar-inner { padding: 0 16px; }
 }
 
 .topbar-status {
@@ -3086,6 +3111,12 @@ input[type="range"]::-webkit-slider-thumb:hover {
   margin: 0 2px;
 }
 
+.topbar-status-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ── Nav active indicator ──────────────────────────────────────
  *
  * The active pill is a framer-motion `layoutId`, so it slides between items
@@ -3132,4 +3163,109 @@ textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--color-lavender);
   outline-offset: 2px;
+}
+
+/* ── Phone shell ───────────────────────────────────────────────
+ *
+ * The rail is 232px. On a 375px phone that is two thirds of the screen spent on
+ * getting somewhere and a third spent on being there — the Work board's task
+ * titles came out one word per line, and Chat had no room for a message bubble
+ * at all.
+ *
+ * Below 720px the rail becomes a bottom tab bar: content takes the full width,
+ * the eight destinations stack icon-over-label along the bottom edge where a
+ * thumb reaches, and nothing is hidden behind a menu. 54px of height plus an
+ * eighth of the width is a 46 × 54 target at the narrowest phone, above the
+ * 44px floor. The wordmark goes — a bottom bar is not where a logo lives, and
+ * the topbar already names the screen.
+ *
+ * 720px rather than a phone width because the same thing is true of a portrait
+ * tablet: past that the rail is a reasonable fraction of the screen again.
+ * ────────────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .app-layout { flex-direction: column; }
+
+  .main-content { order: 1; min-height: 0; }
+
+  .sidebar {
+    order: 2;
+    width: 100%;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    /* iPhone home indicator. Needs viewport-fit=cover to be non-zero — see the
+       `viewport` export in app/layout.tsx. */
+    padding-bottom: env(safe-area-inset-bottom);
+    border-right: none;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .sidebar-logo { display: none; }
+
+  .nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    margin: 0;
+    padding: 8px 2px;
+    min-height: 54px;
+    border: none;
+    border-radius: 0;
+    font-size: 9.5px;
+    letter-spacing: -0.2px;
+  }
+
+  /* "Approvals" and "Blockages" do not fit an eighth of a phone. They clip
+     rather than wrap, because a second line pushes that one tab's icon out of
+     line with the other seven. */
+  .nav-item > span:not(.nav-badge):not(.nav-active-plate) {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Stacked, there is no end-of-row for it to sit at — it becomes a count on
+     the icon's shoulder. */
+  .nav-badge {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    margin-left: 3px;
+  }
+
+  .nav-active-plate { border-radius: 0; }
+
+  /* Title, autonomy mode and status on one phone line. The model and register
+     are reference rather than state and are on Settings anyway. */
+  .topbar-inner,
+  .topbar-inner--full { gap: 10px; padding: 0 14px; }
+  .topbar-status { font-size: 11px; padding: 4px 9px; }
+  .topbar-status-detail { display: none; }
+
+  /* Gutters, on screens that set their own rather than going through
+     .screen--doc. 24px of padding either side of a 375px screen is a seventh of
+     the width given to margin. */
+  .messages-scroll  { padding: 20px 14px; }
+  .chat-input-area  { padding: 10px 14px 14px; }
+  /* The console reads at whatever it types at. The input is forced to 16px
+     below, so leaving the transcript and the caret at 12.5px would show a
+     prompt visibly smaller than the line it produces. */
+  .console-scroll,
+  .console-caret    { font-size: 16px; }
+  .console-scroll   { padding: 16px 14px 22px; }
+  .mind-header      { padding: 14px 16px; flex-wrap: wrap; }
+  .mind-tabs        { padding: 10px 16px; }
+  .mind-feed        { padding: 14px 16px; }
+
+  /* iOS Safari zooms the page in whenever a field it focuses sets type under
+     16px, and does not zoom back out — one tap on the task title and the rest
+     of the app is left scrolled sideways. Most of these fields are sized from a
+     style attribute in the component, so the fix has to outrank one. */
+  input,
+  textarea,
+  select { font-size: 16px !important; }
 }
