@@ -8,7 +8,7 @@
 // the DOM, so pin the environment rather than depend on that resolution.
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 
 import vitestConfig from '../vitest.config';
 
@@ -72,15 +72,20 @@ describe('README "Verifying a change"', () => {
     // `components/**/*.test.tsx`, so a nested file still runs and fails nothing
     // -- it just stops being where the README says to look. A non-recursive
     // readdir would simply not see it.
-    const tests = readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter(
-      (f) => f.endsWith('.test.tsx'),
-    );
+    // `recursive: true` joins each entry with the *platform* separator, so a
+    // nested file reads `charts\Chart.test.tsx` on Windows -- this repo's dev
+    // box. Normalize to `/` before asserting, the same way
+    // app/api/health/route.test.ts does; a bare `/` check against a backslash
+    // path passes, which would blind this test on the one platform it runs on.
+    const tests = readdirSync(dir, { recursive: true, encoding: 'utf8' })
+      .filter((f) => f.endsWith('.test.tsx'))
+      .map((f) => f.split(sep).join('/'));
     // An empty glob would satisfy the loop below without proving anything.
     expect(tests.length).toBeGreaterThan(0);
 
     for (const test of tests) {
       expect(test, `${test} is not directly beside the component it covers`).not.toMatch(
-        /[\/]/,
+        /\//,
       );
       const subject = join(dir, test.replace(/\.test\.tsx$/, '.tsx'));
       expect(existsSync(subject), `${test} has no sibling component`).toBe(true);
