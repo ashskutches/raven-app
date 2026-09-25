@@ -225,4 +225,55 @@ describe('ConsoleScreen abort', () => {
     expect(identityChanged, 'the topbar was never told the register changed').toBe(1);
     expect((screen.getByLabelText('Console input') as HTMLInputElement).disabled).toBe(false);
   });
+
+  /* Not claiming an abort it cannot perform was half the job. The other half is
+     that Ash gets told something.
+
+     Both of the console's own promises are still on screen during the write —
+     the placeholder reading "working — Esc to abort" and the /help line "Esc
+     aborts a running turn" — and the listener still calls preventDefault, so
+     the keystroke is consumed. Silence is indistinguishable from a wedged
+     console, a broken key, or an abort being ignored, and pressing it again
+     gets the same nothing. An affordance the console cannot honour has to say
+     so while it is being offered, not just decline to lie afterwards. */
+  it('says why Esc did nothing during a /register write, and stops advertising an abort it cannot perform', async () => {
+    render(<ConsoleScreen />);
+    await settle();
+
+    const input = screen.getByLabelText('Console input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '/register vivid' } });
+    await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+    await settle();
+
+    expect(registerWrite, '/register vivid issued no PATCH').not.toBeNull();
+
+    // The placeholder is the promise Ash is reading while the write is in
+    // flight. It must not offer an abort that cannot happen.
+    expect(
+      (screen.getByLabelText('Console input') as HTMLInputElement).placeholder,
+      'the placeholder offered Esc during the one window where Esc cannot work',
+    ).not.toMatch(/Esc to abort/);
+
+    await act(async () => { fireEvent.keyDown(document, { key: 'Escape' }); });
+    await settle();
+
+    // Still not a claim that anything was cancelled...
+    expect(screen.queryByText(/\^C\s+aborted/)).toBeNull();
+    // ...but no longer nothing at all. The keystroke was swallowed, so the
+    // console owes an account of why.
+    expect(
+      screen.queryByText(/already with raven-api/i),
+      'Esc was consumed during the write and printed nothing — indistinguishable from a wedged console',
+    ).toBeTruthy();
+
+    await act(async () => { registerWrite!.land(); });
+    await settle();
+
+    expect(screen.getByText(/register\s+balanced → vivid/)).toBeTruthy();
+    expect(identityChanged).toBe(1);
+    const after = screen.getByLabelText('Console input') as HTMLInputElement;
+    expect(after.disabled).toBe(false);
+    // And the ordinary promise comes back once there is something to abort.
+    expect(after.placeholder).toBe('message, or /help');
+  });
 });

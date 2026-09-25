@@ -117,6 +117,19 @@ export default function ConsoleScreen() {
   const [lines, setLines] = useState<Line[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  /**
+   * The name of the in-flight thing that cannot be cancelled, or null.
+   *
+   * `busy` alone is not enough to answer Escape honestly. Almost everything the
+   * console does is a read holding a live signal, and aborting one costs
+   * nothing — but `/register <arg>` is a write already sitting at raven-api,
+   * deliberately issued without a signal (see the note in that case). For the
+   * length of that window the controller is a controller nobody listens to:
+   * `.abort()` fires into it and every observable thing stays exactly as it
+   * was. This is what lets the placeholder stop advertising an abort that
+   * cannot happen, and lets Escape say why instead of eating the keystroke.
+   */
+  const [uncancellable, setUncancellable] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
 
   const scrollRef  = useRef<HTMLDivElement>(null);
@@ -328,14 +341,24 @@ export default function ConsoleScreen() {
         // register that had in fact switched, and skipped the identity-changed
         // dispatch below, so the topbar kept showing the old one. Better to keep
         // waiting for the real answer than to report an outcome it cannot know.
-        const r = await apiFetch('/settings/voice', {
-          method: 'PATCH',
-          body: JSON.stringify({ register: arg }),
-        });
-        const body = await r.json() as {
+        // Silence was the other half of that lie. Not claiming an abort is only
+        // honest if Ash is told why the key he was invited to press did nothing;
+        // otherwise a swallowed keystroke reads as a wedged console.
+        setUncancellable('the register change');
+        let r: Response;
+        let body: {
           register?: string; previous?: string; error?: string;
           baseline?: { drift?: number; note?: string | null };
         };
+        try {
+          r = await apiFetch('/settings/voice', {
+            method: 'PATCH',
+            body: JSON.stringify({ register: arg }),
+          });
+          body = await r.json();
+        } finally {
+          setUncancellable(null);
+        }
         if (!r.ok) { emit('err', body.error ?? `HTTP ${r.status}`); return; }
         emit('ok', `register  ${body.previous} → ${body.register}`);
         // The topbar carries the register and does not poll for it — see the
@@ -659,11 +682,18 @@ export default function ConsoleScreen() {
     const onEscape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
+      // preventDefault has already consumed the keystroke by here, so returning
+      // without printing would leave Ash pressing a key that does nothing and no
+      // way to tell a refused abort from a broken one.
+      if (uncancellable) {
+        emit('dim', `^C  ${uncancellable} is already with raven-api — waiting for the answer`);
+        return;
+      }
       abortRef.current?.abort();
     };
     document.addEventListener('keydown', onEscape);
     return () => document.removeEventListener('keydown', onEscape);
-  }, [busy]);
+  }, [busy, uncancellable, emit]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -685,7 +715,11 @@ export default function ConsoleScreen() {
             onChange={e => setInput(e.target.value)}
             onKeyDown={onKeyDown}
             disabled={busy}
-            placeholder={busy ? 'working — Esc to abort' : 'message, or /help'}
+            placeholder={
+              !busy ? 'message, or /help'
+                : uncancellable ? 'writing — cannot be cancelled'
+                : 'working — Esc to abort'
+            }
             spellCheck={false}
             autoComplete="off"
             aria-label="Console input"
