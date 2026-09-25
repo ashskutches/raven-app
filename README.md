@@ -36,8 +36,9 @@ identical from the outside until something writes.
 ## Verifying a change
 
 ```bash
-npm test             # vitest + jsdom — the speech buffer, the parked-utterance
-                     # seam, and WorkScreen lane grouping
+npm test             # vitest, jsdom by default — the tests sit beside what they
+                     # cover, so the one to read before changing a screen is the
+                     # `components/<Screen>.test.tsx` next to it
 npx tsc --noEmit     # types
 npm run build        # what Railway runs
 ```
