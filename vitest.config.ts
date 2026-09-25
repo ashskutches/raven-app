@@ -10,7 +10,16 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['lib/**/*.test.ts', 'lib/**/*.test.tsx', 'components/**/*.test.tsx'],
+    /* `app/**` is here because route handlers are testable code that nothing
+       else covers -- /api/health's body is a contract another repo parses,
+       and before this glob existed a test for it could not have run. */
+    include: [
+      'lib/**/*.test.ts',
+      'lib/**/*.test.tsx',
+      'components/**/*.test.tsx',
+      'app/**/*.test.ts',
+      'app/**/*.test.tsx',
+    ],
     /* Vitest defaults NODE_ENV to 'test' only when the caller left it unset —
        an inherited value passes straight through. react and react-dom pick
        their CJS build from process.env.NODE_ENV at require time, and React 19's
