@@ -749,6 +749,11 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
 
         {step === 'guild' && (
           loadingGuilds ? <div style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 30 }}>Loading servers...</div>
+          // `guilds` is [] both when the list came back empty and when it never
+          // loaded, so without the error check a failed load printed the red
+          // 'Could not load Discord servers.' and 'No servers found.' together —
+          // the second one contradicting the first by claiming Raven did look.
+          : error ? null
           : guilds.length === 0 ? <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: 30 }}>No servers found.</div>
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button onClick={() => loadMembers(ALL_GUILDS)}

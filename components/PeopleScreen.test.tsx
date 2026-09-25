@@ -188,6 +188,10 @@ describe('GuildPickerModal — the server list itself', () => {
     await settle();
 
     expect(screen.getByText('Could not load Discord servers.')).toBeTruthy();
+    // ...and only that. 'No servers found.' is the empty state for a list that
+    // loaded and came back empty — printing it under the failure claims the
+    // opposite of the failure: that Raven asked and is in no servers.
+    expect(screen.queryByText('No servers found.')).toBeNull();
   });
 
   it('says so when a 200 carries something that is not a list', async () => {
