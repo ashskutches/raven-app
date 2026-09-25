@@ -167,3 +167,37 @@ describe('GuildPickerModal — switching servers after a success', () => {
     expect(screen.getByRole('heading', { level: 3 }).textContent).not.toContain('· 1');
   });
 });
+
+describe('GuildPickerModal — the server list itself', () => {
+  beforeEach(() => { vi.stubGlobal('confirm', () => true); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it('says so when the server list refuses, instead of killing the picker', async () => {
+    // Railway with RAVEN_DISCORD_BOT_TOKEN unset answers this route 503 with
+    // a JSON {error} body. That parses, so .catch() never fired — the object
+    // went into `guilds`, `guilds.length === 0` was false because undefined
+    // is not 0, and the next render died on guilds.map.
+    stubApi({
+      '/api/proxy/people/discord/guilds': () =>
+        json({ error: 'Discord bot token not configured' }, 503),
+    });
+
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+
+    expect(screen.getByText('Could not load Discord servers.')).toBeTruthy();
+  });
+
+  it('says so when a 200 carries something that is not a list', async () => {
+    stubApi({ '/api/proxy/people/discord/guilds': () => json({ guilds: [] }) });
+
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+
+    expect(screen.getByText('Could not load Discord servers.')).toBeTruthy();
+  });
+});
