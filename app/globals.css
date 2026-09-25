@@ -3229,12 +3229,22 @@ textarea:focus-visible,
   }
 
   /* Stacked, there is no end-of-row for it to sit at — it becomes a count on
-     the icon's shoulder. */
+     the icon's shoulder.
+
+     Anchored by its right edge rather than its left. A tab is an eighth of the
+     screen — 46.9px at 375px — so a left anchor at the centre leaves the pill
+     23px to grow into, and '99+' is ~30px of glyphs and padding. Nothing here
+     clips it: .app-layout's `overflow: hidden` is the shell edge, and the
+     ellipsis rule above excludes this span by name. So the overspill does not
+     get trimmed, it lands on Blockages, and the count reads as belonging to the
+     wrong tab. From the right edge the pill grows inward over its own icon
+     instead, at any width and any count. The base rule's `margin-left: auto`
+     is what held it at the end of the rail row and has nothing to do here. */
   .nav-badge {
     position: absolute;
     top: 4px;
-    left: 50%;
-    margin-left: 3px;
+    right: 2px;
+    margin-left: 0;
   }
 
   .nav-active-plate { border-radius: 0; }

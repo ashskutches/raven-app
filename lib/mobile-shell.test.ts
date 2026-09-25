@@ -258,3 +258,102 @@ describe('display cutouts', () => {
     expect(insetAt('right', flat)).toBe(0);
   });
 });
+
+/* ──────────────────────────────────────────────────────────────
+   The approvals count is the one box in the tab bar whose width comes
+   from data rather than from the stylesheet, and the tab bar is the one
+   place it has no room. In the rail it sits at the end of a 232px row
+   and `margin-left: auto` keeps it there at any width; stacked, it is
+   pinned to a point inside a tab an eighth of a phone wide and grows
+   from there. Nothing clips it — `.app-layout`'s `overflow: hidden` is
+   the shell edge, and the `overflow: hidden` on the tab labels excludes
+   this span by name — so a pill anchored too far right does not get
+   trimmed, it lands on the next tab.
+
+   jsdom has no layout engine and cannot measure text, so this resolves
+   the cascade by hand the way the cutout arithmetic above does, with a
+   glyph advance stood in for the font. The conclusion does not turn on
+   that estimate: '99+' is ~18px of glyphs in any sans at 10px/700, and
+   a centre-anchored pill misses by ~9px.
+  ────────────────────────────────────────────────────────────── */
+describe('approvals count on a phone', () => {
+  /** Widest label the badge ever renders — page.tsx caps the count at '99+'. */
+  const WIDEST = '99+';
+
+  /** Tabs across the bar, from the array the shell actually maps over. */
+  const TABS = (() => {
+    const literal = /const NAV_ITEMS[^=]*=\s*\[([\s\S]*?)\n\];/.exec(shell);
+    expect(literal, 'no NAV_ITEMS array in the shell').not.toBeNull();
+    return [...literal![1].matchAll(/\bid:\s*'/g)].length;
+  })();
+
+  /** A length, possibly a percentage of `basis`. `auto` and unknowns are null. */
+  function len(value: string | undefined, basis: number): number | null {
+    const v = (value ?? '').trim();
+    const pct = /^(-?[\d.]+)%$/.exec(v);
+    if (pct) return (Number(pct[1]) / 100) * basis;
+    const abs = /^(-?[\d.]+)px$/.exec(v);
+    if (abs) return Number(abs[1]);
+    return v === '0' ? 0 : null;
+  }
+
+  /** Every declaration applying to `selector` at `width`, later winning. */
+  function resolve(selector: string, width: number): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [prop, value] of declarations(css, selector, width)) out[prop] = value;
+    return out;
+  }
+
+  /** Horizontal padding, from the shorthand or the long-hands. */
+  function paddingX(d: Record<string, string>): number {
+    let left = 0;
+    let right = 0;
+    if (d.padding) {
+      const p = splitTop(d.padding, ' \t\n\r');
+      right = len(p[1] ?? p[0], 0) ?? 0;
+      left = len(p[3] ?? p[1] ?? p[0], 0) ?? 0;
+    }
+    left = len(d['padding-left'], 0) ?? left;
+    right = len(d['padding-right'], 0) ?? right;
+    return left + right;
+  }
+
+  /** The badge's edges, in px from the left edge of its tab. */
+  function badgeBox(label: string, screen: number, tab: number) {
+    const d = resolve('.nav-badge', screen);
+    expect(d.position, 'the badge is not pinned on a phone').toBe('absolute');
+
+    // Inter's digits and '+' run about 0.6em, and the global reset makes
+    // min-width a border-box width, so padding is inside it.
+    const glyphs = label.length * (len(d['font-size'], 0) ?? 0) * 0.6;
+    const width = Math.max(len(d['min-width'], tab) ?? 0, glyphs + paddingX(d));
+
+    const right = len(d.right, tab);
+    if (right !== null) return { left: tab - right - width, right: tab - right };
+    const left = (len(d.left, tab) ?? 0) + (len(d['margin-left'], tab) ?? 0);
+    return { left, right: left + width };
+  }
+
+  // 375px is an iPhone 12–16 held upright; 320px is an SE, and the narrowest
+  // screen that still gets this layout rather than a horizontal scrollbar.
+  // Portrait, so `.app-layout`'s safe-area padding is zero and the eight
+  // `flex: 1 1 0` tabs divide the whole window.
+  for (const screen of [375, 320]) {
+    const tab = screen / TABS;
+
+    it(`keeps a ${WIDEST} count inside its own tab at ${screen}px`, () => {
+      const box = badgeBox(WIDEST, screen, tab);
+      expect(
+        box.right,
+        `'${WIDEST}' runs ${(box.right - tab).toFixed(1)}px past its ${tab.toFixed(1)}px tab`,
+      ).toBeLessThanOrEqual(tab);
+      expect(box.left, `'${WIDEST}' runs past the left edge of its tab`).toBeGreaterThanOrEqual(0);
+    });
+
+    it(`keeps it on the icon's shoulder at ${screen}px`, () => {
+      // It is a count on the approvals icon, not a second element beside it —
+      // a fix that recentres the pill under the label has lost the point.
+      expect(badgeBox(WIDEST, screen, tab).right).toBeGreaterThan(tab / 2);
+    });
+  }
+});
