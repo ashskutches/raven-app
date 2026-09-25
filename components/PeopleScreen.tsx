@@ -656,10 +656,22 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
   const [warning, setWarning]               = useState('');
 
   useEffect(() => {
-    apiFetch('/people/discord/guilds')
-      .then(r => r.json() as Promise<Guild[]>)
-      .then(data => { setGuilds(data); setLoadingGuilds(false); })
-      .catch(() => { setError('Could not load Discord servers.'); setLoadingGuilds(false); });
+    (async () => {
+      try {
+        const r = await apiFetch('/people/discord/guilds');
+        // The same refusal shape as both member routes: raven-api answers
+        // 503/500 with a JSON {error} body, and that parses, so .catch()
+        // never fired. The object went into `guilds`, and `guilds.length
+        // === 0` was false because undefined is not 0 — so the next render
+        // fell through to guilds.map and took the whole picker down instead
+        // of saying the servers could not be loaded.
+        if (!r.ok) throw new Error(`guilds request failed: ${r.status}`);
+        const data = await r.json() as Guild[];
+        if (!Array.isArray(data)) throw new Error('guilds response was not a list');
+        setGuilds(data);
+      } catch { setError('Could not load Discord servers.'); }
+      setLoadingGuilds(false);
+    })();
   }, []);
 
   async function loadMembers(guild: Guild) {
