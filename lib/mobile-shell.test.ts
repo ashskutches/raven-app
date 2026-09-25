@@ -1,3 +1,11 @@
+// @vitest-environment node
+//
+// This file reads globals.css and page.tsx off disk. The suite's default
+// environment is jsdom, and a jsdom file's `node:fs` can come back as Vite's
+// browser stub -- an object whose every export is undefined. `readFileSync`
+// is then not a function, it throws at module scope, and the file reports
+// "0 test" with no failing assertion naming the cause. Nothing below touches
+// the DOM, so pin the environment rather than depend on that resolution.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
