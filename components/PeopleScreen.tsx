@@ -689,7 +689,14 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
         }
       } else {
         const r = await apiFetch(`/people/discord/guilds/${guild.id}/members`);
+        // Same shape of refusal as the every-server route — a JSON {error}
+        // body with a non-2xx status — but this route answers with a bare
+        // array, so the unchecked parse handed an object to setMembers and
+        // the very next render died on members.filter, taking the modal with
+        // it instead of saying the load failed.
+        if (!r.ok) throw new Error(`members request failed: ${r.status}`);
         const data = await r.json() as GuildMember[];
+        if (!Array.isArray(data)) throw new Error('members response was not a list');
         setMembers(data);
       }
     } catch { setError('Could not load members.'); }
