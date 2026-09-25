@@ -738,7 +738,12 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
           </h3>
           <div style={{ display: 'flex', gap: 8 }}>
             {step === 'members' && (
-              <button onClick={() => { setStep('guild'); setSearch(''); }} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '5px 12px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 12 }}>← Back</button>
+              // `error` is shared with the member load, and the guild step now
+              // renders nothing while it is set — so leaving it behind would
+              // back the user out to an empty modal with no server to retry
+              // on. Clear it: a member failure is stale the moment you leave
+              // that list, and a guilds failure never gets this far.
+              <button onClick={() => { setStep('guild'); setSearch(''); setError(''); }} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '5px 12px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 12 }}>← Back</button>
             )}
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center' }}><X size={18} /></button>
           </div>
