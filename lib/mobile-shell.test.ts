@@ -75,11 +75,9 @@ describe('phone shell', () => {
     expect(Number(min![1])).toBeGreaterThanOrEqual(44);
   });
 
-  it('keeps focused fields at 16px so iOS does not zoom the page in', () => {
-    // The screens size their inputs from style attributes, so the rule has to
-    // carry !important or it loses to every one of them.
-    expect(phone).toMatch(/input,\s*\n?\s*textarea,\s*\n?\s*select\s*\{\s*font-size:\s*16px\s*!important/);
-  });
+  /* The 16px field rule used to live in this block and was asserted here by
+     matching its text. It is scoped to the pointer now, which a text match
+     cannot tell from being scoped to nothing — see `touch fields` below. */
 
   it('measures the shell in dvh, not vh', () => {
     // 100vh on a phone is the screen plus the browser toolbar, which puts the
@@ -140,20 +138,27 @@ function px(value: string, insets: Record<string, number>): number {
   return 0;
 }
 
-/** Does this at-rule prelude hold for a plain window `width` px wide? */
-function atRuleHolds(prelude: string, width: number): boolean {
+/* A window to resolve the cascade against. Width alone was enough while every
+   at-rule here keyed off width, but the field-zoom rule below keys off the
+   pointer instead — the same phone is coarse at both 393px and 852px. */
+type Device = { width: number; pointer: 'fine' | 'coarse' };
+
+/** Does this at-rule prelude hold on `device`? */
+function atRuleHolds(prelude: string, device: Device): boolean {
   if (prelude.startsWith('@supports')) return true;
   if (!prelude.startsWith('@media')) return false;
   return [...prelude.matchAll(/\(\s*([\w-]+)\s*:\s*([^)]+)\)/g)].every(([, name, raw]) => {
-    const n = Number(/^([\d.]+)px$/.exec(raw.trim())?.[1]);
-    if (name === 'max-width') return width <= n;
-    if (name === 'min-width') return width >= n;
+    const value = raw.trim();
+    if (name === 'pointer') return value === device.pointer;
+    const n = Number(/^([\d.]+)px$/.exec(value)?.[1]);
+    if (name === 'max-width') return device.width <= n;
+    if (name === 'min-width') return device.width >= n;
     return false; // prefers-reduced-motion and friends are not this scenario
   });
 }
 
-/** Declarations applying to `selector` in a window `width` px wide, in source order. */
-function declarations(source: string, selector: string, width: number): Array<[string, string]> {
+/** Declarations applying to `selector` on `device`, in source order. */
+function declarations(source: string, selector: string, device: Device): Array<[string, string]> {
   const src = source.replace(/\/\*[\s\S]*?\*\//g, '');
   const out: Array<[string, string]> = [];
   const enclosing: boolean[] = [];
@@ -178,7 +183,7 @@ function declarations(source: string, selector: string, width: number): Array<[s
     }
     const prelude = src.slice(start, i).trim();
     if (prelude.startsWith('@')) {
-      enclosing.push(atRuleHolds(prelude, width));
+      enclosing.push(atRuleHolds(prelude, device));
       i++;
       start = i;
       continue;
@@ -228,6 +233,62 @@ function edgeInset(
   return boxes.margin + boxes.padding;
 }
 
+/* One iPhone 15 Pro, both ways up, and the desk it is not. Portrait is under
+   the 720px breakpoint and landscape is over it, which is the whole point:
+   rules the phone needs in both orientations cannot be written against width. */
+const PORTRAIT: Device = { width: 393, pointer: 'coarse' };
+const LANDSCAPE: Device = { width: 852, pointer: 'coarse' };
+const DESKTOP: Device = { width: 1440, pointer: 'fine' };
+
+/** The declaration of `prop` that wins for `selector` on `device`, if any. */
+function resolved(selector: string, prop: string, device: Device): string | undefined {
+  const hits = declarations(css, selector, device).filter(([p]) => p === prop);
+  return hits.length ? hits[hits.length - 1][1] : undefined;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   iOS decides whether to zoom a focused field by the field's type
+   size, and it does that on any touch window — not only ones under
+   720px. The same iPhone that is 393px upright is 852px sideways,
+   so a width breakpoint covers one orientation of the device it was
+   written for. Resolve these against the pointer instead.
+  ────────────────────────────────────────────────────────────── */
+describe('touch fields', () => {
+  for (const [orientation, device] of [
+    ['portrait', PORTRAIT],
+    ['landscape', LANDSCAPE],
+  ] as const) {
+    it(`holds a focused field at 16px in ${orientation}, so iOS does not zoom the page in`, () => {
+      for (const sel of ['input', 'textarea', 'select']) {
+        // The screens size their fields from style attributes — 15px on the Work
+        // task title, 14 on the People form, 12 on feedback — so the rule has to
+        // carry !important or it loses to every one of them.
+        expect(resolved(sel, 'font-size', device), `\`${sel}\` in ${orientation}`)
+          .toBe('16px !important');
+      }
+    });
+  }
+
+  it('reads the console transcript back at the size its input types at', () => {
+    // A 12.5px transcript under a forced-16px prompt shows the line visibly
+    // smaller than the caret that produced it, so these move together.
+    for (const [orientation, device] of [['portrait', PORTRAIT], ['landscape', LANDSCAPE]] as const) {
+      for (const sel of ['.console-scroll', '.console-caret']) {
+        expect(resolved(sel, 'font-size', device), `\`${sel}\` in ${orientation}`).toBe('16px');
+      }
+    }
+  });
+
+  it('leaves a mouse-driven window at its authored sizes', () => {
+    // None of this is a desktop concern, and 16px console text there would be
+    // a visible regression rather than a fix.
+    expect(resolved('input', 'font-size', DESKTOP)).toBeUndefined();
+    expect(resolved('textarea', 'font-size', DESKTOP)).toBe('14px');
+    expect(resolved('.console-scroll', 'font-size', DESKTOP)).toBe('12.5px');
+    expect(resolved('.console-caret', 'font-size', DESKTOP)).toBe('12.5px');
+  });
+});
+
 describe('display cutouts', () => {
   /* iPhone 15 Pro held sideways: the CSS window is 852px wide — past the 720px
      breakpoint, so this is the rail layout, not the tab bar — and the sensor
@@ -235,7 +296,6 @@ describe('display cutouts', () => {
      page an already-inset window; now it hands over the whole display and the
      stylesheet is the only thing left that can keep the nav out from under the
      housing. Either the shell or the element owning that edge may do it. */
-  const LANDSCAPE = 852;
   const HOUSING = 59;
 
   const insetAt = (side: 'left' | 'right', env: Record<string, number>) =>
