@@ -11,6 +11,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { viewport } from '@/app/layout';
+
 /**
  * The phone layout is CSS, and jsdom has no layout engine — it will not tell us
  * that the sidebar is 232px of a 375px screen. What it can be held to is the
@@ -88,6 +90,19 @@ describe('phone shell', () => {
   it('styles the approvals count from the stylesheet so the tab bar can move it', () => {
     expect(shell).toMatch(/className="nav-badge"/);
     expect(phone).toMatch(/\.nav-badge\s*\{/);
+  });
+
+  /* Every safe-area inset this file spends -- the padding-bottom above, and the
+     whole of `display cutouts` below -- is zero unless the root layout asks for
+     viewport-fit=cover. Next writes the viewport meta tag itself and leaves
+     viewport-fit out of it, so the export in app/layout.tsx is the only thing
+     that sets it. Nothing else here can notice it going: the cutout suite feeds
+     env() its own numbers instead of asking a browser, and the padding-bottom
+     assertion matches declaration text that stays true while resolving to 0 on
+     device. So read the export, or dropping it takes 273b69f and d4bda0f back
+     with the suite still green. */
+  it('asks for the viewport-fit=cover those insets are measured against', () => {
+    expect(viewport.viewportFit).toBe('cover');
   });
 });
 
