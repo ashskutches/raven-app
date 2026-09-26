@@ -297,8 +297,24 @@ describe('touch fields', () => {
   it('leaves a mouse-driven window at its authored sizes', () => {
     // None of this is a desktop concern, and 16px console text there would be
     // a visible regression rather than a fix.
-    expect(resolved('input', 'font-size', DESKTOP)).toBeUndefined();
-    expect(resolved('textarea', 'font-size', DESKTOP)).toBe('14px');
+    //
+    // Ask for the fields by the selectors that actually size them. The sheet
+    // sizes text fields by type -- `input[type="text"], ... , textarea, select`
+    // -- and `declarations` matches a selector list member for member, so bare
+    // `input` finds only the pointer-scoped rule above and is undefined here
+    // whatever that list says. Asserting that reads as "nothing sizes an input
+    // on desktop" while leaving the rule that does entirely uncovered.
+    for (const sel of [
+      'input[type="text"]',
+      'input[type="email"]',
+      'input[type="password"]',
+      'input[type="date"]',
+      'input[type="number"]',
+      'textarea',
+      'select',
+    ]) {
+      expect(resolved(sel, 'font-size', DESKTOP), `\`${sel}\` on desktop`).toBe('14px');
+    }
     expect(resolved('.console-scroll', 'font-size', DESKTOP)).toBe('12.5px');
     expect(resolved('.console-caret', 'font-size', DESKTOP)).toBe('12.5px');
   });
