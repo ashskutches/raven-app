@@ -87,6 +87,23 @@ describe('GuildPickerModal — all servers', () => {
 
     expect(screen.getByText('Could not load members.')).toBeTruthy();
   });
+
+  it('names the servers it could not read when the walk half-fails', async () => {
+    // raven-api answers 200 with whatever it did manage to collect and lists
+    // the guilds it could not reach alongside it, so the list is real but
+    // short — the only thing that says so is this warning.
+    stubApi({
+      '/api/proxy/people/discord/members': () => json({
+        members: [{ discord_user_id: '9', username: 'kestrel', display_name: 'Kestrel', avatar_url: null }],
+        failed_guilds: [{ name: 'Kestrel Keep' }],
+      }),
+    });
+
+    await openAllServers();
+
+    expect(screen.getByText('Kestrel')).toBeTruthy();
+    expect(screen.getByText(/Could not read Kestrel Keep/)).toBeTruthy();
+  });
 });
 
 describe('GuildPickerModal — one server', () => {
@@ -189,6 +206,27 @@ describe('GuildPickerModal — switching servers after a success', () => {
     await settle();
 
     expect(screen.getByText('Raven HQ')).toBeTruthy();
+  });
+
+  it('drops the half-failed walk\'s warning when backing out to the server list', async () => {
+    stubApi({
+      '/api/proxy/people/discord/members': () => json({
+        members: [{ discord_user_id: '9', username: 'kestrel', display_name: 'Kestrel', avatar_url: null }],
+        failed_guilds: [{ name: 'Kestrel Keep' }],
+      }),
+    });
+
+    await openAllServers();
+    expect(screen.getByText(/Could not read Kestrel Keep/)).toBeTruthy();
+
+    // The warning renders above the step switch, so it outlives the step it
+    // describes unless Back clears it — and over the server list it claims
+    // members are missing from a list that is not a list of members.
+    fireEvent.click(screen.getByText('← Back'));
+    await settle();
+
+    expect(screen.getByText('Raven HQ')).toBeTruthy();
+    expect(screen.queryByText(/Could not read Kestrel Keep/)).toBeNull();
   });
 });
 
