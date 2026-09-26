@@ -357,10 +357,10 @@ describe('approvals count on a phone', () => {
     return v === '0' ? 0 : null;
   }
 
-  /** Every declaration applying to `selector` at `width`, later winning. */
-  function resolve(selector: string, width: number): Record<string, string> {
+  /** Every declaration applying to `selector` on `device`, later winning. */
+  function resolve(selector: string, device: Device): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const [prop, value] of declarations(css, selector, width)) out[prop] = value;
+    for (const [prop, value] of declarations(css, selector, device)) out[prop] = value;
     return out;
   }
 
@@ -380,7 +380,9 @@ describe('approvals count on a phone', () => {
 
   /** The badge's edges, in px from the left edge of its tab. */
   function badgeBox(label: string, screen: number, tab: number) {
-    const d = resolve('.nav-badge', screen);
+    // A phone, so the pointer is coarse: some of what reaches the tab bar is
+    // scoped to the pointer rather than to the window's width.
+    const d = resolve('.nav-badge', { width: screen, pointer: 'coarse' });
     expect(d.position, 'the badge is not pinned on a phone').toBe('absolute');
 
     // Inter's digits and '+' run about 0.6em, and the global reset makes
