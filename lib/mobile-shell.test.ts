@@ -255,10 +255,16 @@ const PORTRAIT: Device = { width: 393, pointer: 'coarse' };
 const LANDSCAPE: Device = { width: 852, pointer: 'coarse' };
 const DESKTOP: Device = { width: 1440, pointer: 'fine' };
 
+/** Every declaration applying to `selector` on `device`, later winning. */
+function resolve(selector: string, device: Device): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [prop, value] of declarations(css, selector, device)) out[prop] = value;
+  return out;
+}
+
 /** The declaration of `prop` that wins for `selector` on `device`, if any. */
 function resolved(selector: string, prop: string, device: Device): string | undefined {
-  const hits = declarations(css, selector, device).filter(([p]) => p === prop);
-  return hits.length ? hits[hits.length - 1][1] : undefined;
+  return resolve(selector, device)[prop];
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -370,13 +376,6 @@ describe('approvals count on a phone', () => {
     const abs = /^(-?[\d.]+)px$/.exec(v);
     if (abs) return Number(abs[1]);
     return v === '0' ? 0 : null;
-  }
-
-  /** Every declaration applying to `selector` on `device`, later winning. */
-  function resolve(selector: string, device: Device): Record<string, string> {
-    const out: Record<string, string> = {};
-    for (const [prop, value] of declarations(css, selector, device)) out[prop] = value;
-    return out;
   }
 
   /** Horizontal padding, from the shorthand or the long-hands. */
