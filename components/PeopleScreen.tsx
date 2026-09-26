@@ -12,7 +12,7 @@
  *  - Privacy-first: Raven never shares your data without authorization
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Plus, Trash2, Edit3, Check, X, Cake,
@@ -674,7 +674,18 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
     })();
   }, []);
 
+  // Nothing cancels a member load, so one the user walked away from still
+  // resolves — and used to commit over whatever step it landed on. On the
+  // guild step that is ruinous now that `error` blanks the server list
+  // outright (see the `error ? null` guard below): a walk that fails after
+  // '← Back' left a modal showing only 'Could not load members.', with no
+  // server to retry on and no Back button, which only renders on the members
+  // step. Every load takes a ticket; leaving the list or starting another one
+  // voids it, and a load holding a voided ticket commits nothing.
+  const loadTicket = useRef(0);
+
   async function loadMembers(guild: Guild) {
+    const ticket = ++loadTicket.current;
     setSelectedGuild(guild);
     setLoadingMembers(true);
     setStep('members');
@@ -695,6 +706,7 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
           members: GuildMember[];
           failed_guilds?: Array<{ name: string }>;
         };
+        if (ticket !== loadTicket.current) return;
         setMembers(data.members ?? []);
         if (data.failed_guilds?.length) {
           setWarning(`Could not read ${data.failed_guilds.map(f => f.name).join(', ')} — those members are missing from this list.`);
@@ -709,9 +721,13 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
         if (!r.ok) throw new Error(`members request failed: ${r.status}`);
         const data = await r.json() as GuildMember[];
         if (!Array.isArray(data)) throw new Error('members response was not a list');
+        if (ticket !== loadTicket.current) return;
         setMembers(data);
       }
-    } catch { setError('Could not load members.'); }
+    } catch {
+      if (ticket !== loadTicket.current) return;
+      setError('Could not load members.');
+    }
     setLoadingMembers(false);
   }
 
@@ -743,7 +759,7 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
               // back the user out to an empty modal with no server to retry
               // on. Clear it: a member failure is stale the moment you leave
               // that list, and a guilds failure never gets this far.
-              <button onClick={() => { setStep('guild'); setSearch(''); setError(''); }} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '5px 12px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 12 }}>← Back</button>
+              <button onClick={() => { loadTicket.current++; setStep('guild'); setSearch(''); setError(''); }} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '5px 12px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 12 }}>← Back</button>
             )}
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center' }}><X size={18} /></button>
           </div>
