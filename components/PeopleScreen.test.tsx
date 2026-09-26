@@ -166,6 +166,30 @@ describe('GuildPickerModal — switching servers after a success', () => {
     expect(screen.queryByText('Kestrel')).toBeNull();
     expect(screen.getByRole('heading', { level: 3 }).textContent).not.toContain('· 1');
   });
+
+  it('still offers the server list after backing out of a failed load', async () => {
+    stubApi({
+      '/api/proxy/people/discord/members': () =>
+        json({ error: 'Discord API error: 429' }, 500),
+    });
+
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+
+    fireEvent.click(screen.getByText('All servers'));
+    await settle();
+    expect(screen.getByText('Could not load members.')).toBeTruthy();
+
+    // '← Back' is the only way out of a failed member load that keeps the
+    // picker open, so the server step behind it has to be usable — the guilds
+    // loaded fine and picking a different one is the obvious retry.
+    fireEvent.click(screen.getByText('← Back'));
+    await settle();
+
+    expect(screen.getByText('Raven HQ')).toBeTruthy();
+  });
 });
 
 describe('GuildPickerModal — the server list itself', () => {
@@ -188,6 +212,10 @@ describe('GuildPickerModal — the server list itself', () => {
     await settle();
 
     expect(screen.getByText('Could not load Discord servers.')).toBeTruthy();
+    // ...and only that. 'No servers found.' is the empty state for a list that
+    // loaded and came back empty — printing it under the failure claims the
+    // opposite of the failure: that Raven asked and is in no servers.
+    expect(screen.queryByText('No servers found.')).toBeNull();
   });
 
   it('says so when a 200 carries something that is not a list', async () => {
