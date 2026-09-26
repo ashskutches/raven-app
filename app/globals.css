@@ -3261,21 +3261,29 @@ textarea:focus-visible,
      the width given to margin. */
   .messages-scroll  { padding: 20px 14px; }
   .chat-input-area  { padding: 10px 14px 14px; }
-  /* The console reads at whatever it types at. The input is forced to 16px
-     below, so leaving the transcript and the caret at 12.5px would show a
-     prompt visibly smaller than the line it produces. */
-  .console-scroll,
-  .console-caret    { font-size: 16px; }
   .console-scroll   { padding: 16px 14px 22px; }
   .mind-header      { padding: 14px 16px; flex-wrap: wrap; }
   .mind-tabs        { padding: 10px 16px; }
   .mind-feed        { padding: 14px 16px; }
+}
 
-  /* iOS Safari zooms the page in whenever a field it focuses sets type under
-     16px, and does not zoom back out — one tap on the task title and the rest
-     of the app is left scrolled sideways. Most of these fields are sized from a
-     style attribute in the component, so the fix has to outrank one. */
+/* iOS Safari zooms the page in whenever a field it focuses sets type under
+   16px, and does not zoom back out — one tap on the task title and the rest of
+   the app is left scrolled sideways. That is a property of the touch keyboard,
+   not of the window, and width is the wrong axis to ask on: the same iPhone is
+   393px upright and 852px sideways (see the cutout note on .app-layout), so
+   scoping this to the 720px breakpoint fixed portrait and left landscape
+   zooming on every field. Ask about the pointer instead. Most of these fields
+   are sized from a style attribute in the component, so the rule has to outrank
+   one. */
+@media (pointer: coarse) {
   input,
   textarea,
   select { font-size: 16px !important; }
+
+  /* The console reads at whatever it types at, so the transcript and the caret
+     come up with the input rather than showing a prompt visibly smaller than
+     the line it produces. */
+  .console-scroll,
+  .console-caret { font-size: 16px; }
 }
