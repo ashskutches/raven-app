@@ -683,7 +683,10 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
      behind it leave an in-flight request running, and the every-server walk
      takes seconds where one guild takes milliseconds — so an abandoned walk
      can land last and repaint its members, count and errors under whichever
-     server the picker has moved on to. */
+     server the picker has moved on to. '← Back' also voids the in-flight load:
+     the guild step blanks the server list while `error` is set, so a walk that
+     failed after the user left it would strand them on a modal showing only
+     'Could not load members.', with no server to retry on and no Back button. */
   const requestSeq = useRef(0);
 
   async function loadMembers(guild: Guild) {
@@ -772,7 +775,7 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
               // `warning`: it renders above the step switch, so the half-failed
               // walk's 'those members are missing from this list' used to hang
               // over the server list, describing a list that is no longer there.
-              <button onClick={() => { setStep('guild'); setSearch(''); setError(''); setWarning(''); }} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '5px 12px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 12 }}>← Back</button>
+              <button onClick={() => { requestSeq.current++; setLoadingMembers(false); setStep('guild'); setSearch(''); setError(''); setWarning(''); }} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '5px 12px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 12 }}>← Back</button>
             )}
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center' }}><X size={18} /></button>
           </div>

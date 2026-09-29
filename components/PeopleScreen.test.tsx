@@ -231,6 +231,72 @@ describe('GuildPickerModal — switching servers after a success', () => {
   });
 });
 
+describe('GuildPickerModal — a member load the user walked away from', () => {
+  beforeEach(() => { vi.stubGlobal('confirm', () => true); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  /** A members route the test resolves by hand, so the walk can still be in
+      flight while '← Back' is clicked — which the button allows: it renders
+      for the whole members step, loading included. */
+  function heldMembersRoute() {
+    let release!: (body: unknown, status?: number) => void;
+    const held = new Promise<Response>(resolve => {
+      release = (body, status = 200) => resolve(json(body, status));
+    });
+    return { route: () => held, release: (body: unknown, status?: number) => release(body, status) };
+  }
+
+  async function backOutOfAnInFlightWalk(route: () => Promise<Response>) {
+    stubApi({ '/api/proxy/people/discord/members': route });
+
+    render(<PeopleScreen />);
+    await settle();
+    fireEvent.click(screen.getByText('Browse Members'));
+    await settle();
+
+    fireEvent.click(screen.getByText('All servers'));
+    await settle();
+    // Still walking every server — and Back is already on offer.
+    expect(screen.getByText('Loading members...')).toBeTruthy();
+    fireEvent.click(screen.getByText('← Back'));
+    await settle();
+    expect(screen.getByText('Raven HQ')).toBeTruthy();
+  }
+
+  it('does not blank the server list when the abandoned walk then fails', async () => {
+    const { route, release } = heldMembersRoute();
+    await backOutOfAnInFlightWalk(route);
+
+    // The walk the user left behind falls over — RAVEN_DISCORD_BOT_TOKEN
+    // unset, or Discord 429.
+    release({ error: 'Discord API error: 429' }, 500);
+    await settle();
+
+    // `error` is shared with the guild step, which renders nothing while it is
+    // set. So a stale member failure used to replace the whole server list
+    // with a red line about members — and '← Back' is gone on this step, so
+    // there was nothing left to retry on.
+    expect(screen.getByText('Raven HQ')).toBeTruthy();
+    expect(screen.queryByText('Could not load members.')).toBeNull();
+  });
+
+  it("does not park the abandoned walk's warning over the server list", async () => {
+    const { route, release } = heldMembersRoute();
+    await backOutOfAnInFlightWalk(route);
+
+    release({
+      members: [{ discord_user_id: '9', username: 'kestrel', display_name: 'Kestrel', avatar_url: null }],
+      failed_guilds: [{ name: 'Kestrel Keep' }],
+    });
+    await settle();
+
+    // 'those members are missing from this list' describes a list the user is
+    // no longer looking at.
+    expect(screen.getByText('Raven HQ')).toBeTruthy();
+    expect(screen.queryByText(/Could not read Kestrel Keep/)).toBeNull();
+  });
+});
+
 describe('GuildPickerModal — the server list itself', () => {
   beforeEach(() => { vi.stubGlobal('confirm', () => true); });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
