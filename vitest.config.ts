@@ -28,5 +28,15 @@ export default defineConfig({
        not a function". Pin it, so the suite tests the code and not the shell.
        lib/test-env.test.ts guards this. */
     env: { NODE_ENV: 'test' },
+    /* Vitest's 5s default is a wall-clock budget, and it was sized for a suite
+       whose slowest case took ~200ms. The guild-picker cap tests now render
+       thousands of member rows and take ~2s each on their own, which leaves
+       barely 2x of headroom -- and `vitest run` runs these files in parallel
+       forks on a 4-core box, where a 3x slowdown from contention is routine.
+       The result was a suite that failed a different test on every run: a
+       ~50ms synchronous hook test in lib/speech.test.ts was once starved past
+       40s. Nothing was wrong with any of them. Budget for the contention
+       instead, so a timeout again means a hang rather than a busy machine. */
+    testTimeout: 20_000,
   },
 });
