@@ -76,6 +76,11 @@ interface GuildMember {
 /** The synthetic "every server" row at the top of the picker. */
 const ALL_GUILDS: Guild = { id: '__all__', name: 'All servers', icon_url: null };
 
+/* How many member rows the picker will mount at once. The members endpoints
+   return whole guilds now — `?limit=` is opt-in, and the every-server list has
+   no cap at all — so the size of this list is Discord's business, not ours. */
+const MEMBER_RENDER_CAP = 100;
+
 /* ── Constants ──────────────────────────────────────────────── */
 
 const RELATIONSHIP_TYPES = [
@@ -719,6 +724,13 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
     m.display_name.toLowerCase().includes(search.toLowerCase()) ||
     m.username.toLowerCase().includes(search.toLowerCase())
   );
+  // Every member is fetched and searched — only the rows are capped. The list
+  // is a plain column with one avatar <img> per member, so rendering a whole
+  // 5,000-member guild would mount 5,000 rows and fire 5,000 requests at
+  // Discord's CDN in one commit, which freezes the modal. Slicing the fetch
+  // instead would hide the unrendered members from search too.
+  const shown = filtered.slice(0, MEMBER_RENDER_CAP);
+  const hidden = filtered.length - shown.length;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -792,9 +804,14 @@ function GuildPickerModal({ onClose, onImport, existingIds }: {
             <input placeholder="Search members..." value={search} onChange={e => setSearch(e.target.value)}
               style={{ width: '100%', boxSizing: 'border-box', padding: '9px 14px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff', fontSize: 13, outline: 'none', fontFamily: 'inherit', marginBottom: 12 }}
             />
+            {!loadingMembers && hidden > 0 && (
+              <div style={{ color: 'var(--color-text-subtle)', fontSize: 12, marginBottom: 10, lineHeight: 1.45 }}>
+                Showing the first {MEMBER_RENDER_CAP} of {filtered.length} matches — search to narrow it down.
+              </div>
+            )}
             {loadingMembers ? <div style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 30 }}>Loading members...</div>
             : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {filtered.map(m => (
+                {shown.map(m => (
                   <div key={m.discord_user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10 }}>
                     {m.avatar_url
                       ? <img src={m.avatar_url} alt={m.display_name} width={28} height={28} style={{ borderRadius: '50%' }} />
