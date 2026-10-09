@@ -38,5 +38,13 @@ export default defineConfig({
        40s. Nothing was wrong with any of them. Budget for the contention
        instead, so a timeout again means a hang rather than a busy machine. */
     testTimeout: 20_000,
+    /* Node 25+ ships its own global localStorage, which is undefined unless
+       --localstorage-file is given, and it shadows jsdom's -- so every
+       `localStorage.clear()` in a test throws. Turn Node's off and let jsdom's
+       through. The flag exists from Node 22; Node 20 would reject it. */
+    execArgv:
+      Number(process.versions.node.split('.')[0]) >= 22
+        ? ['--no-experimental-webstorage']
+        : [],
   },
 });
