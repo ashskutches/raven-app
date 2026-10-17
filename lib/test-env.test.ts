@@ -35,4 +35,41 @@ describe('test harness', () => {
 
     expect(ctx.task.timeout).toBeGreaterThanOrEqual(SLOWEST_TEST_ALONE_MS * 5);
   });
+
+  /* Node 25+ defines a global localStorage of its own, and vitest's jsdom
+     environment cannot replace it: populateGlobal only copies a window key
+     that already exists on the global if that key is on its own KEYS list,
+     and localStorage is not on it (Storage and StorageEvent are, the instance
+     is not). So Node's wins, and reading it without --localstorage-file does
+     not give undefined -- the getter throws "The argument
+     '--localstorage-file' is an invalid localStorage location". The config
+     passes --no-experimental-webstorage to every worker to get it out of the
+     way.
+
+     Nothing had held that in place. The flag itself is covered by the version
+     gate's own test, but deleting the execArgv line from the config,
+     reordering it out of `test`, or switching `pool` to 'threads' leaves that
+     green, because none of it reads the environment the suite actually got.
+     The first symptom was a product test instead: ChatScreen.test.tsx's
+     afterEach dying on `localStorage.clear()`, which names the chat screen
+     and not the harness.
+
+     So ask the running environment, the way the timeout case asks the running
+     task. Both halves of the claim matter: it has to be there, and it has to
+     be jsdom's -- Node's throws on access with no --localstorage-file, and is
+     functional but still not jsdom's with one. `Storage` IS on vitest's KEYS
+     list, so the constructor in scope here is jsdom's, which is what makes
+     the instance check discriminate. (window.localStorage would not:
+     populateGlobal sets global.window = global, so it is the same reference
+     either way.) Verified by running the suite under
+     --experimental-webstorage on Node 24, which is the same state Node 25
+     boots into: this case fails, and so does ChatScreen. */
+  it("exposes jsdom's localStorage, not the one Node 25+ brings", () => {
+    // Throws rather than returning undefined when Node's is the one in scope;
+    // that TypeError names --localstorage-file, so let it be the failure.
+    const storage = globalThis.localStorage as Storage | undefined;
+
+    expect(typeof storage?.clear).toBe('function');
+    expect(storage).toBeInstanceOf(Storage);
+  });
 });
