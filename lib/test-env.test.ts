@@ -46,13 +46,11 @@ describe('test harness', () => {
      passes --no-experimental-webstorage to every worker to get it out of the
      way.
 
-     Nothing had held that in place. The flag itself is covered by the version
-     gate's own test, but deleting the execArgv line from the config,
-     reordering it out of `test`, or switching `pool` to 'threads' leaves that
-     green, because none of it reads the environment the suite actually got.
-     The first symptom was a product test instead: ChatScreen.test.tsx's
-     afterEach dying on `localStorage.clear()`, which names the chat screen
-     and not the harness.
+     Nothing had held that in place, and deleting the execArgv line or
+     reordering it out of `test` would not have failed anything, because
+     nothing read the environment the suite actually got. The first symptom
+     was a product test instead: ChatScreen.test.tsx's afterEach dying on
+     `localStorage.clear()`, which names the chat screen and not the harness.
 
      So ask the running environment, the way the timeout case asks the running
      task. Both halves of the claim matter: it has to be there, and it has to
@@ -71,5 +69,23 @@ describe('test harness', () => {
 
     expect(typeof storage?.clear).toBe('function');
     expect(storage).toBeInstanceOf(Storage);
+  });
+
+  /* The case above only bites where Node has a localStorage to shadow jsdom's
+     -- Node 25+. Through Node 24, which is what this box runs, Web Storage is
+     flagged off anyway, so dropping the execArgv line leaves that case green
+     here and fails on somebody else's machine. This one is the half that
+     discriminates on the Node the suite is actually developed against:
+     forks pass the config's execArgv straight to the child, so the worker's
+     own process.execArgv is proof the pin arrived, not a re-reading of the
+     config text that set it.
+
+     The `>= 22` ternary guarding the flag in the config has no test and cannot
+     have a useful one: it exists for Node below 22, where the flag does not
+     exist yet -- and jsdom@30 declares `^22.22.2 || ^24.15.0 || >=26.0.0` and
+     means it, so on those versions the fork dies inside node_modules before
+     any test file loads. Keep the ternary; nothing here can exercise it. */
+  it('passes the webstorage pin through to the worker running this file', () => {
+    expect(process.execArgv).toContain('--no-experimental-webstorage');
   });
 });
