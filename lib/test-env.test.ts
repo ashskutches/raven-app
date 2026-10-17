@@ -36,14 +36,15 @@ describe('test harness', () => {
     expect(ctx.task.timeout).toBeGreaterThanOrEqual(SLOWEST_TEST_ALONE_MS * 5);
   });
 
-  /* Node 25+ defines a global localStorage of its own, and vitest's jsdom
-     environment cannot replace it: populateGlobal only copies a window key
-     that already exists on the global if that key is on its own KEYS list,
-     and localStorage is not on it (Storage and StorageEvent are, the instance
-     is not). So Node's wins, and reading it without --localstorage-file does
-     not give undefined -- the getter throws "The argument
-     '--localstorage-file' is an invalid localStorage location". The config
-     passes --no-experimental-webstorage to every worker to get it out of the
+  /* Node 25+ defines a global localStorage and sessionStorage of its own, and
+     vitest's jsdom environment cannot replace either: populateGlobal only
+     copies a window key that already exists on the global if that key is on
+     its own KEYS list, and neither instance is on it (Storage and
+     StorageEvent are, localStorage and sessionStorage are not). So Node's
+     win, and reading localStorage without --localstorage-file does not give
+     undefined -- the getter throws "The argument '--localstorage-file' is an
+     invalid localStorage location". The config passes
+     --no-experimental-webstorage to every worker to get both out of the
      way.
 
      Nothing had held that in place. The flag itself is covered by the version
@@ -64,12 +65,35 @@ describe('test harness', () => {
      either way.) Verified by running the suite under
      --experimental-webstorage on Node 24, which is the same state Node 25
      boots into: this case fails, and so does ChatScreen. */
-  it("exposes jsdom's localStorage, not the one Node 25+ brings", () => {
+  it("exposes jsdom's Web Storage, not the pair Node 25+ brings", () => {
     // Throws rather than returning undefined when Node's is the one in scope;
     // that TypeError names --localstorage-file, so let it be the failure.
     const storage = globalThis.localStorage as Storage | undefined;
 
     expect(typeof storage?.clear).toBe('function');
     expect(storage).toBeInstanceOf(Storage);
+
+    /* sessionStorage is the same hole and the pin governs it too, but it
+       fails quietly where localStorage fails loudly. Node's sessionStorage
+       needs no --localstorage-file, so it reads back a working Storage:
+       `typeof clear` cannot tell it from jsdom's and only the constructor
+       can, which is why the instance check is the half that carries this.
+
+       Quiet is the worse failure here. Node's is process-wide and outlives
+       the per-file jsdom window, so under a fork reused across files the
+       `raven_auth` an AuthGate test writes survives ChatScreen.test.tsx's
+       afterEach `sessionStorage.clear()` -- that clears Node's store, not
+       the window's -- and ChatScreen's getItem('raven_prefill') path reads
+       state no test in that file wrote. Order-dependent, and it names the
+       chat screen: exactly the diagnostic this file exists to pre-empt.
+
+       Today the localStorage half above turns the run red first, so this is
+       defence in depth. It stops being that the moment the two diverge --
+       a vitest that adds localStorage to KEYS but not sessionStorage leaves
+       the case above green with the leak still live. */
+    const session = globalThis.sessionStorage as Storage | undefined;
+
+    expect(typeof session?.clear).toBe('function');
+    expect(session).toBeInstanceOf(Storage);
   });
 });
