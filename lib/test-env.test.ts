@@ -80,11 +80,16 @@ describe('test harness', () => {
      own process.execArgv is proof the pin arrived, not a re-reading of the
      config text that set it.
 
-     The `>= 22` ternary guarding the flag in the config has no test and cannot
-     have a useful one: it exists for Node below 22, where the flag does not
-     exist yet -- and jsdom@30 declares `^22.22.2 || ^24.15.0 || >=26.0.0` and
-     means it, so on those versions the fork dies inside node_modules before
-     any test file loads. Keep the ternary; nothing here can exercise it. */
+     The gate deciding whether the flag is passed at all lives in
+     vitest.config.ts as the exported `webstorageExecArgv`, and withholds the
+     flag below 22.4, where Web Storage landed -- a Node that does not know a
+     flag does not ignore it, it exits 9 and takes every worker with it. That
+     gate is covered next door in lib/vitest-execargv.test.ts, and the division
+     of labour between there and here is deliberate. That file calls the
+     exported function with version strings, so it can hold the 22.4 boundary
+     against widening from a box running none of those versions. This case
+     holds the half no version string reaches: that the config still wires the
+     gate's result into the worker. Neither one alone is enough. */
   it('passes the webstorage pin through to the worker running this file', () => {
     expect(process.execArgv).toContain('--no-experimental-webstorage');
   });
