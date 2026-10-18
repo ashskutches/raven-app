@@ -8,7 +8,7 @@
 // failing assertion naming the cause. Pin the environment, the same reason
 // lib/readme.test.ts pins it.
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -156,6 +156,120 @@ describe('vitest execArgv', () => {
       // `>= 22` as a whole version -- the shape the gate shipped as and no
       // longer has. `>= 22.4` is the truth and must not trip this.
       expect(source).not.toMatch(/>=\s*22(?!\.)/);
+    });
+  });
+
+  /* The other paragraph in that file -- the one justifying the sessionStorage
+     half of the storage case -- drifted the same way and needs the same pin.
+
+     It was written to say why the sessionStorage assertions earn their keep,
+     and reached for a concrete leak to make the case: an AuthGate test's
+     `raven_auth` outliving ChatScreen.test.tsx's afterEach and surfacing
+     through ChatScreen's prefill read. None of that holds against this tree.
+     There is no AuthGate test; `raven_auth` is not the key the prefill path
+     reads, so it could never come back from that getItem; and the clear does
+     reach the write, because in the very state being described there is one
+     store, not two -- the sibling paragraph above the localStorage case says
+     so itself, populateGlobal sets global.window = global.
+
+     That makes the paragraph self-refuting to anyone who checks it, which is
+     the whole danger: a maintainer debugging an order-dependent storage
+     failure follows it, finds every hook false, concludes the scenario cannot
+     arise, and deletes the sessionStorage half as speculative -- removing the
+     only guard against a vitest that adds localStorage to KEYS but not
+     sessionStorage, which is the divergence the paragraph's last sentence
+     exists to cover. The real mechanism is simpler and still live: Node's
+     store is process-wide and outlives the per-file jsdom window.
+
+     So assert the paragraph against the code it points at, the way the
+     describe above asserts the execArgv one: read the prefill key off
+     ChatScreen and the test files off disk, so prose naming something the
+     repo does not have fails here rather than misleading someone at 1am. */
+  describe('the sessionStorage paragraph in lib/test-env.test.ts', () => {
+    const root = join(__dirname, '..');
+    const source = readFileSync(join(__dirname, 'test-env.test.ts'), 'utf8');
+    const chatTest = readFileSync(
+      join(root, 'components', 'ChatScreen.test.tsx'),
+      'utf8',
+    );
+
+    /* Sliced off the sentence that opens the paragraph rather than off line
+       numbers, so editing anything above it does not move the assertion. */
+    const paragraph = (() => {
+      const start = source.indexOf('sessionStorage is the same hole');
+
+      if (start < 0) {
+        throw new Error(
+          'lib/test-env.test.ts no longer explains the sessionStorage half',
+        );
+      }
+
+      const end = source.indexOf('*/', start);
+
+      return source.slice(start, end === -1 ? undefined : end);
+    })();
+
+    // The key the read path the paragraph describes actually looks up, read
+    // off the component rather than spelled out here.
+    const prefillKey = (() => {
+      const chat = readFileSync(join(root, 'components', 'ChatScreen.tsx'), 'utf8');
+      const key = chat.match(/sessionStorage\.getItem\('([^']+)'\)/)?.[1];
+
+      if (!key) {
+        throw new Error('ChatScreen no longer reads a sessionStorage key');
+      }
+
+      return key;
+    })();
+
+    it('quotes only a key the read path it describes can return', () => {
+      expect(paragraph).toContain(prefillKey);
+
+      // Storage-key-shaped literals the paragraph quotes. A leaked key that is
+      // not the one getItem asks for can never come back from that call, so
+      // naming one describes a leak that cannot happen.
+      const quoted = new Set(
+        [...paragraph.matchAll(/[`']([a-z][a-z0-9]*(?:_[a-z0-9]+)+)[`']/g)].map(
+          (m) => m[1],
+        ),
+      );
+
+      expect([...quoted]).toEqual([prefillKey]);
+    });
+
+    it('blames only test files the repo has', () => {
+      const named = new Set<string>();
+
+      // Named outright -- "ChatScreen.test.tsx's afterEach".
+      for (const m of paragraph.matchAll(/\b([A-Z][A-Za-z0-9]*)\.test\.tsx?\b/g)) {
+        named.add(m[1]);
+      }
+      // Named in prose -- "an AuthGate test writes".
+      for (const m of paragraph.matchAll(/\ban?\s+([A-Z][A-Za-z0-9]*)\s+test\b/g)) {
+        named.add(m[1]);
+      }
+
+      // Not vacuous: the paragraph has to point somewhere to be worth reading.
+      expect(named.size).toBeGreaterThan(0);
+
+      for (const component of named) {
+        expect(
+          existsSync(join(root, 'components', `${component}.test.tsx`)),
+          `the paragraph blames a ${component} test; there is no components/${component}.test.tsx`,
+        ).toBe(true);
+      }
+    });
+
+    it('does not say the cleanup it names misses the store the write landed in', () => {
+      // Derived: the afterEach the paragraph points at does clear sessionStorage.
+      expect(chatTest).toMatch(/afterEach\(\(\) => \{[\s\S]*?sessionStorage\.clear\(\)/);
+      // And there is only one store for it to miss -- the file says so itself,
+      // two paragraphs up, which is what makes the opposition below false.
+      expect(source).toContain('global.window = global');
+
+      expect(paragraph).not.toMatch(
+        /\bstore,?\s*not\s+the\s+window'?s\b|\bnot\s+the\s+window'?s\s+(?:own\s+)?store\b/i,
+      );
     });
   });
 });

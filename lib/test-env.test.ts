@@ -78,12 +78,15 @@ describe('test harness', () => {
        can, which is why the instance check is the half that carries this.
 
        Quiet is the worse failure here. Node's is process-wide and outlives
-       the per-file jsdom window, so under a fork reused across files the
-       `raven_auth` an AuthGate test writes survives ChatScreen.test.tsx's
-       afterEach `sessionStorage.clear()` -- that clears Node's store, not
-       the window's -- and ChatScreen's getItem('raven_prefill') path reads
-       state no test in that file wrote. Order-dependent, and it names the
-       chat screen: exactly the diagnostic this file exists to pre-empt.
+       the per-file jsdom window, so under a fork reused across files a test
+       file that writes sessionStorage and never clears it leaves that state
+       standing for the next file's first test, and ChatScreen's
+       getItem('raven_prefill') path then reads state no test in that file
+       wrote. Order-dependent, and it names the chat screen: exactly the
+       diagnostic this file exists to pre-empt. ChatScreen.test.tsx's own
+       afterEach clears both stores, so the write has to come from a file
+       that does not -- and nothing obliges one to, which is why the leak is
+       held off here rather than by convention.
 
        Today the localStorage half above turns the run red first, so this is
        defence in depth. It stops being that the moment the two diverge --
