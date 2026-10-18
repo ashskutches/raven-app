@@ -105,13 +105,16 @@ describe('test harness', () => {
      config text that set it.
 
      The gate deciding whether the flag is passed at all lives in
-     vitest.config.ts as the exported `webstorageExecArgv`, and withholds the
-     flag below 22.4, where Web Storage landed -- a Node that does not know a
-     flag does not ignore it, it exits 9 and takes every worker with it. That
-     gate is covered next door in lib/vitest-execargv.test.ts, and the division
-     of labour between there and here is deliberate. That file calls the
-     exported function with version strings, so it can hold the 22.4 boundary
-     against widening from a box running none of those versions. This case
+     lib/webstorage-execargv.ts as `webstorageExecArgv`, which vitest.config.ts
+     imports and wires into test.execArgv -- a module of its own, not a second
+     name alongside the config's default, which rollup warns about above every
+     run. It withholds the flag below 22.4, where Web Storage landed -- a Node
+     that does not know a flag does not ignore it, it exits 9 and takes every
+     worker with it. That gate is covered next door in
+     lib/vitest-execargv.test.ts, and the division of labour between there and
+     here is deliberate. That file calls the exported function with version
+     strings, so it can hold the 22.4 boundary against widening from a box
+     running none of those versions. This case
      holds the half no version string reaches: that the config still wires the
      gate's result into the worker. Neither one alone is enough. */
   it('passes the webstorage pin through to the worker running this file', () => {
