@@ -95,10 +95,28 @@ describe('vitest execArgv', () => {
      the function rather than off a remembered 22.4, so moving the gate takes
      the prose with it. */
   describe("the paragraph in lib/test-env.test.ts describing this gate", () => {
+    const CONFIG = 'vitest.config.ts';
     const source = readFileSync(
       join(__dirname, 'test-env.test.ts'),
       'utf8',
     );
+    /* The module the gate is exported from, read off the config's own import
+       rather than spelled out here -- the same derivation as `boundary`, for
+       the same reason: a gate that moves again takes this assertion, and so
+       the prose, with it. */
+    const gateModule = (() => {
+      const config = readFileSync(join(__dirname, '..', CONFIG), 'utf8');
+      const specifier = config.match(
+        /import\s*\{[^}]*\bwebstorageExecArgv\b[^}]*\}\s*from\s*'([^']+)'/,
+      )?.[1];
+
+      if (!specifier) {
+        throw new Error(`${CONFIG} no longer imports webstorageExecArgv`);
+      }
+
+      return `${specifier.replace(/^\.\//, '')}.ts`;
+    })();
+
     // The gate's own boundary, derived: the lowest 22.x the flag survives.
     const boundary = (() => {
       for (let minor = 0; minor <= 99; minor += 1) {
@@ -114,6 +132,23 @@ describe('vitest execArgv', () => {
 
     it('points at the file that does cover it', () => {
       expect(source).toContain('vitest-execargv.test.ts');
+    });
+
+    /* The paragraph was written when the gate was a named export of the config,
+       and the commit that moved it to its own module -- to stop the
+       [MIXED_EXPORTS] warning the sibling case above pins -- landed on disjoint
+       files and merged clean, exactly as the drift the paragraph itself
+       narrates. So the prose now sends a reader adding a second harness helper
+       to put it in the config "beside" a gate that is not there, which turns
+       that sibling case red and brings the warning back. */
+    it('names the module the gate is exported from, not the config importing it', () => {
+      expect(source).toContain(gateModule);
+      // Prose placing an export in the config, within a clause of naming it.
+      // The truthful wording -- the config imports the gate and wires it into
+      // test.execArgv -- keeps the two far apart.
+      expect(source).not.toMatch(
+        new RegExp(`${CONFIG.replace(/\./g, '\\.')}[\\s\\S]{0,40}export`, 'i'),
+      );
     });
 
     it('quotes the boundary the gate implements, not the major it once used', () => {
