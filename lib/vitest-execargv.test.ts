@@ -6,6 +6,8 @@
 // throws before a test runs, so pin the environment -- the same reason
 // lib/readme.test.ts pins it.
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -55,5 +57,52 @@ describe('vitest execArgv', () => {
       probe.status,
       `node ${process.versions.node} rejected ${argv.join(' ')}: ${probe.stderr}`,
     ).toBe(0);
+  });
+  /* lib/test-env.test.ts carries the other half of this gate's coverage -- it
+     asserts the flag reached the worker running it -- and the paragraph above
+     that case describes the gate for whoever is reading the harness. It was
+     written against the gate's first shape, an inline `major >= 22` ternary in
+     vitest.config.ts, and said of it: no test, and no useful test possible.
+     That branch and the one that replaced the ternary with `webstorageExecArgv`
+     and wrote this file landed concurrently on disjoint files, so both merged
+     clean and the paragraph survived a rewrite that falsified every clause of
+     it.
+
+     Left alone it is an instruction to delete this file. A maintainer who finds
+     it and believes the comment beside the sibling case -- that the gate cannot
+     usefully be tested -- removes the only coverage the boundary has, and the
+     merge that made the comment false makes no sound. So assert the paragraph
+     against the gate it describes, the way lib/readme.test.ts asserts the
+     README's Node range against jsdom's own package.json: read the boundary off
+     the function rather than off a remembered 22.4, so moving the gate takes
+     the prose with it. */
+  describe("the paragraph in lib/test-env.test.ts describing this gate", () => {
+    const source = readFileSync(
+      join(__dirname, 'test-env.test.ts'),
+      'utf8',
+    );
+    // The gate's own boundary, derived: the lowest 22.x the flag survives.
+    const boundary = (() => {
+      for (let minor = 0; minor <= 99; minor += 1) {
+        if (webstorageExecArgv(`22.${minor}.0`).length > 0) return `22.${minor}`;
+      }
+      throw new Error('the gate withholds the flag on every 22.x');
+    })();
+
+    it('does not tell a reader the gate is beyond testing', () => {
+      expect(source).not.toMatch(/cannot\s+have\s+a\s+useful\s+one/i);
+      expect(source).not.toMatch(/nothing here can exercise it/i);
+    });
+
+    it('points at the file that does cover it', () => {
+      expect(source).toContain('vitest-execargv.test.ts');
+    });
+
+    it('quotes the boundary the gate implements, not the major it once used', () => {
+      expect(source).toContain(boundary);
+      // `>= 22` as a whole version -- the shape the gate shipped as and no
+      // longer has. `>= 22.4` is the truth and must not trip this.
+      expect(source).not.toMatch(/>=\s*22(?!\.)/);
+    });
   });
 });
